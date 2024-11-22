@@ -6,7 +6,7 @@
 
 # App version and name
 APP_NAME="NoirNet"
-VERSION=1.0.3
+VERSION=1.0.4
 LAST_UPDATED="2024-11-22"
 
 # Default configuration file location
@@ -196,11 +196,26 @@ log_message() {
 
 # Function: Initialize the log file
 init_log() {
+    if [ -z "$LOG_FILE" ]; then
+        log_message "ERROR" "LOG_FILE variable is not set." "$LINENO"
+        exit 1
+    fi
+
     if [ ! -f "$LOG_FILE" ]; then
-        touch "$LOG_FILE"
-        log_message "DEBUG" "Created log file: $LOG_FILE" "$LINENO"
+        # Attempt to create the log file
+        if touch "$LOG_FILE" 2>/dev/null; then
+            log_message "DEBUG" "Created log file: $LOG_FILE" "$LINENO"
+        else
+            log_message "ERROR" "Failed to create log file: $LOG_FILE" "$LINENO"
+            exit 1
+        fi
     else
-        log_message "DEBUG" "Log file already exists: $LOG_FILE" "$LINENO"
+        # Check if the log file is writable
+        if [ ! -w "$LOG_FILE" ]; then
+            log_message "ERROR" "Log file exists but is not writable: $LOG_FILE" "$LINENO"
+            exit 1
+        fi
+        log_message "DEBUG" "Log file already exists and is writable: $LOG_FILE" "$LINENO"
     fi
 }
 
@@ -276,28 +291,28 @@ delete_cache() {
 
     # Ensure CACHE_DIR is defined and not empty
     if [[ -z "$CACHE_DIR" ]]; then
-        printf "Error: CACHE_DIR is not set. Unable to proceed.\n" >&2
+        log_message "ERROR" "CACHE_DIR is not set. Unable to proceed." "$LINENO"
         exit 1
     fi
 
     # Ensure CACHE_DIR exists
     if [[ ! -d "$CACHE_DIR" ]]; then
-        printf "Error: Cache directory '%s' does not exist.\n" "$CACHE_DIR" >&2
+        log_message "ERROR" "Cache directory '$CACHE_DIR' does not exist." "$LINENO"
         exit 1
     fi
 
     # Prevent deletion of critical directories
     if is_critical_directory "$CACHE_DIR"; then
-        printf "Error: Attempted to delete a critical directory '%s'. Aborting.\n" "$CACHE_DIR" >&2
+        log_message "ERROR" "Attempted to delete a critical directory '$CACHE_DIR'. Aborting." "$LINENO"
         exit 1
     fi
 
     # Attempt to delete the cache directory
     if rm -rf "$CACHE_DIR"; then
-        printf "Success: All cached files in '%s' deleted.\n" "$CACHE_DIR"
+        log_message "INFO" "Success: All cached files in '$CACHE_DIR' deleted." "$LINENO"
         exit 0
     else
-        printf "Error: Failed to delete cached files in '%s'.\n" "$CACHE_DIR" >&2
+        log_message "ERROR" "Failed to delete cached files in '$CACHE_DIR'." "$LINENO"
         exit 1
     fi
 }
@@ -911,9 +926,15 @@ process_arguments() {
 
     [[ "$CLEAN" = true ]] && delete_cache
     init_cache
+
+    [[ -n "$CLI_LOG_FILE" ]] && LOG_FILE="$CLI_LOG_FILE"
     [[ -n "$CLI_LOG_LEVEL" ]] && LOG_LEVEL="$CLI_LOG_LEVEL"
     init_log
+
+    # Initialize CSV file
     init_csv
+
+    # Override config settings with command line options
     [[ "$SHOW_LOG" = true ]] && show_log
     [[ "$SHOW_HELP" = true ]] && show_help
     [[ -n "$CLI_PUSHOVER_NOTIFICATION" ]] && PUSHOVER_NOTIFICATION="$CLI_PUSHOVER_NOTIFICATION"
