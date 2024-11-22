@@ -1,0 +1,111 @@
+.TH NOIRNET 1 "November 22, 2024" "1.0.0" "NoirNet Manual"
+.SH NAME
+NoirNet \- Monitors internet and DNS access and sends notifications
+
+.SH SYNOPSIS
+.B noirnet
+[\fIoptions\fR]
+
+.SH DESCRIPTION
+.B NoirNet
+is a script that monitors the device's internet and DNS access and sends notifications via Pushover and desktop notifications.
+
+.SH OPTIONS
+.TP
+.B \-h, \-\-help
+Display this help message.
+.TP
+.B \-V, \-\-version
+Display the application version.
+.TP
+.B \-i, \-\-interval \fIseconds\fR
+Set the interval between checks (default: 60 seconds).
+.TP
+.B \-c, \-\-config \fIconfig_file\fR
+Specify a custom configuration file (default: ~/.noirnetrc).
+.TP
+.B \-I, \-\-init
+Initialize the configuration file.
+.TP
+.B \-F, \-\-force-init
+Force initialize the configuration file if one exists.
+.TP
+.B \-s, \-\-show-config
+Show the configuration settings.
+.TP
+.B \-S, \-\-show-config-file
+Show the configuration file.
+.TP
+.B \-C, \-\-clean
+Delete all cached files.
+.TP
+.B \-k, \-\-cache-dir \fIpath\fR
+Specify a custom cache directory.
+.TP
+.B \-p, \-\-pushover
+Send Pushover notifications.
+.TP
+.B \-a, \-\-api-token \fItoken\fR
+Specify the API token for Pushover notifications.
+.TP
+.B \-u, \-\-user-key \fIkey\fR
+Specify the user key for Pushover notifications.
+.TP
+.B \-d, \-\-desktop
+Send desktop notifications using AppleScript.
+.TP
+.B \-v, \-\-verbose
+Enable verbose output.
+.TP
+.B \-l, \-\-log
+Log the log file to the screen.
+.TP
+.B \-o, \-\-output \fIfile\fR
+Specify a custom log file location.
+.TP
+.B \-L, \-\-log-level \fIlevel\fR
+Set the log level (FATAL, ERROR, WARN, INFO, DEBUG).
+.TP
+.B \-P, \-\-ping-target \fIIP\fR
+Set a custom ping target (default: 8.8.8.8).
+.TP
+.B \-D, \-\-dns-test-domain \fIdomain\fR
+Set a custom DNS test domain (default: example.com).
+.TP
+.B \-T, \-\-timeout \fIseconds\fR
+Set the timeout for ping and DNS tests (default: 5 seconds).
+.TP
+.B \-r, \-\-start
+Start the network check service in the background.
+.TP
+.B \-t, \-\-stop
+Stop the network check service.
+.TP
+.B \-z, \-\-status
+Check the current status of the network check service.
+
+.SH EXAMPLES
+.TP
+Run interactively with default settings:
+.B noirnet
+.TP
+Run interactively with custom targets:
+.B noirnet \-\-ping-target 1.1.1.1 \-\-dns-test-domain google.com
+.TP
+Start the service with custom targets:
+.B noirnet \-\-ping-target 1.1.1.1 \-\-dns-test-domain google.com \-\-start
+.TP
+Check service status:
+.B noirnet \-\-status
+.TP
+Stop the service:
+.B noirnet \-\-stop
+
+.SH AUTHOR
+John Smith III
+
+.SH LICENSE
+MIT License
+
+.SH SEE ALSO
+ping(8), nslookup(1), curl(1)
