@@ -821,7 +821,7 @@ monitor_network() {
                     echo "$(date -u -d "@$network_down_start" "+%Y-%m-%dT%H:%M:%SZ"),$network_up_timestamp,$network_down_duration" >>"$network_csv_file"
                 fi
                 local message="$network_up_timestamp: Network is back online after $network_down_duration seconds of downtime."
-                log_message "INFO" "$message" "$LINENO"
+                log_message "WARN" "$message" "$LINENO"
                 send_desktop_notification "$APP_NAME Alert" "$message"
                 send_pushover_notification "$APP_NAME Alert" "$message"
                 network_down=false
@@ -841,7 +841,7 @@ monitor_network() {
                         echo "$(date -u -d "@$dns_down_start" "+%Y-%m-%dT%H:%M:%SZ"),$dns_up_timestamp,$dns_down_duration" >>"$dns_csv_file"
                     fi
                     local message="$dns_up_timestamp: DNS resolution is back after $dns_down_duration seconds of downtime."
-                    log_message "INFO" "$message" "$LINENO"
+                    log_message "WARN" "$message" "$LINENO"
                     send_desktop_notification "$APP_NAME Alert" "$message"
                     send_pushover_notification "$APP_NAME Alert" "$message"
                     dns_down=false
@@ -852,7 +852,7 @@ monitor_network() {
                 if [[ "$dns_down" = false ]]; then
                     dns_down_start=$current_time
                     local message="$current_timestamp: DNS resolution failed. DNS is now down."
-                    log_message "WARN" "$message" "$LINENO"
+                    log_message "ERROR" "$message" "$LINENO"
                     send_desktop_notification "$APP_NAME Alert" "$message"
                     dns_down=true
                 fi
@@ -863,7 +863,7 @@ monitor_network() {
             if [[ "$network_down" = false ]]; then
                 network_down_start=$current_time
                 local message="$current_timestamp: Network is down."
-                log_message "WARN" "$message" "$LINENO"
+                log_message "ERROR" "$message" "$LINENO"
                 send_desktop_notification "$APP_NAME Alert" "$message"
                 network_down=true
             fi
