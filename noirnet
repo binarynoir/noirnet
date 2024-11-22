@@ -9,6 +9,10 @@ APP_NAME="NoirNet"
 VERSION=1.0.4
 LAST_UPDATED="2024-11-22"
 
+# ==============================
+# Base Application Variables
+# ==============================
+
 # Default configuration file location
 CONFIG_FILE="$HOME/.noirnetrc"
 CLI_CONFIG_FILE=false
@@ -22,6 +26,32 @@ INIT_FORCE=false
 
 # Lock file
 PID_FILE="$CACHE_DIR/noirnet.pid"
+
+# Service mode flag
+IS_SERVICE=false
+
+# Pushover notification options
+PUSHOVER_NOTIFICATION=false
+PUSHOVER_API_TOKEN=
+PUSHOVER_USER_KEY=
+
+# Native desktop notification options
+DESKTOP_NOTIFICATION=true
+
+# Log levels
+LOG_LEVELS=("FATAL" "ERROR" "WARN" "INFO" "DEBUG")
+LOG_LEVEL="INFO"
+VERBOSE=false
+
+# ANSI color codes
+RED='\033[0;31m'
+RED_BG='\033[41m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# ==============================
+# Application Specific Variables
+# ==============================
 
 # CSV downtime history files
 network_csv_file="$CACHE_DIR/network_downtime.csv"
@@ -38,28 +68,6 @@ CHECK_INTERVAL=60
 
 # Default timeout interval (in seconds)
 TIMEOUT=5
-
-# Pushover notification options
-PUSHOVER_NOTIFICATION=false
-PUSHOVER_API_TOKEN=
-PUSHOVER_USER_KEY=
-
-# Native desktop notification options
-DESKTOP_NOTIFICATION=true
-
-# Service mode flag
-IS_SERVICE=false
-
-# Log levels
-LOG_LEVELS=("FATAL" "ERROR" "WARN" "INFO" "DEBUG")
-LOG_LEVEL="INFO"
-VERBOSE=false
-
-# ANSI color codes
-RED='\033[0;31m'
-RED_BG='\033[41m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
 
 # ==============================
 # Utility Functions
