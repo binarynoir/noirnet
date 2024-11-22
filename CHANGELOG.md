@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - none
 
+## [1.0.1] - 2024-11-21
+
+### Changed
+
+- Showing the version information now includes last updated date
+- Reorganized functions for maintainability
+- Updated cli help and man page for better grouping of topics
+
 ## [1.0.0] - 2024-11-21
 
 ### Added

@@ -1,14 +1,14 @@
-.TH NOIRNET 1 "November 22, 2024" "1.0.0" "NoirNet Manual"
+.TH NOIRNET 1 "November 22, 2024" "Version 1.0.1" "User Commands"
 .SH NAME
-NoirNet \- Monitors internet and DNS access and sends notifications
+NoirNet \- Monitors internet and DNS access and sends notifications.
 
 .SH SYNOPSIS
 .B noirnet
-[\fIoptions\fR]
+.RI [ options ]
 
 .SH DESCRIPTION
 .B NoirNet
-is a script that monitors the device's internet and DNS access and sends notifications via Pushover and desktop notifications.
+is a script designed to monitor the device's internet and DNS access. It logs downtime and sends notifications via desktop or Pushover.
 
 .SH OPTIONS
 .TP
@@ -18,37 +18,34 @@ Display this help message.
 .B \-V, \-\-version
 Display the application version.
 .TP
-.B \-i, \-\-interval \fIseconds\fR
-Set the interval between checks (default: 60 seconds).
-.TP
-.B \-c, \-\-config \fIconfig_file\fR
-Specify a custom configuration file (default: ~/.noirnetrc).
+.B \-c, \-\-config \fI<config_file>\fP
+Specify a custom configuration file (default: $HOME/.noirnetrc).
 .TP
 .B \-I, \-\-init
 Initialize the configuration file.
 .TP
-.B \-F, \-\-force-init
-Force initialize the configuration file if one exists.
+.B \-F, \-\-force\-init
+Force initialization of the configuration file if one exists.
 .TP
-.B \-s, \-\-show-config
+.B \-s, \-\-show\-config
 Show the configuration settings.
 .TP
-.B \-S, \-\-show-config-file
+.B \-S, \-\-show\-config\-file
 Show the configuration file.
 .TP
 .B \-C, \-\-clean
 Delete all cached files.
 .TP
-.B \-k, \-\-cache-dir \fIpath\fR
+.B \-k, \-\-cache\-dir \fI<path>\fP
 Specify a custom cache directory.
 .TP
 .B \-p, \-\-pushover
 Send Pushover notifications.
 .TP
-.B \-a, \-\-api-token \fItoken\fR
+.B \-a, \-\-api\-token \fI<token>\fP
 Specify the API token for Pushover notifications.
 .TP
-.B \-u, \-\-user-key \fIkey\fR
+.B \-u, \-\-user\-key \fI<key>\fP
 Specify the user key for Pushover notifications.
 .TP
 .B \-d, \-\-desktop
@@ -60,19 +57,22 @@ Enable verbose output.
 .B \-l, \-\-log
 Log the log file to the screen.
 .TP
-.B \-o, \-\-output \fIfile\fR
+.B \-o, \-\-output \fI<file>\fP
 Specify a custom log file location.
 .TP
-.B \-L, \-\-log-level \fIlevel\fR
+.B \-L, \-\-log\-level \fI<level>\fP
 Set the log level (FATAL, ERROR, WARN, INFO, DEBUG).
 .TP
-.B \-P, \-\-ping-target \fIIP\fR
+.B \-i, \-\-interval \fI<seconds>\fP
+Set the interval between checks (default: 60 seconds).
+.TP
+.B \-P, \-\-ping\-target \fI<IP>\fP
 Set a custom ping target (default: 8.8.8.8).
 .TP
-.B \-D, \-\-dns-test-domain \fIdomain\fR
+.B \-D, \-\-dns\-test\-domain \fI<domain>\fP
 Set a custom DNS test domain (default: example.com).
 .TP
-.B \-T, \-\-timeout \fIseconds\fR
+.B \-T, \-\-timeout \fI<seconds>\fP
 Set the timeout for ping and DNS tests (default: 5 seconds).
 .TP
 .B \-r, \-\-start
@@ -90,10 +90,10 @@ Run interactively with default settings:
 .B noirnet
 .TP
 Run interactively with custom targets:
-.B noirnet \-\-ping-target 1.1.1.1 \-\-dns-test-domain google.com
+.B noirnet \-\-ping\-target 1.1.1.1 \-\-dns\-test\-domain google.com
 .TP
 Start the service with custom targets:
-.B noirnet \-\-ping-target 1.1.1.1 \-\-dns-test-domain google.com \-\-start
+.B noirnet \-\-ping\-target 1.1.1.1 \-\-dns\-test\-domain google.com \-\-start
 .TP
 Check service status:
 .B noirnet \-\-status
@@ -107,5 +107,27 @@ John Smith III
 .SH LICENSE
 MIT License
 
+.SH FILES
+.TP
+.B $HOME/.noirnetrc
+Default configuration file.
+.TP
+.B /tmp/noirnet_cache
+Directory to store all cache files.
+.TP
+.B /tmp/noirnet_cache/noirnet.log
+Default log file location.
+.TP
+.B /tmp/noirnet_cache/noirnet.pid
+Lock file.
+.TP
+.B /tmp/noirnet_cache/network_downtime.csv
+CSV file for network downtime history.
+.TP
+.B /tmp/noirnet_cache/dns_downtime.csv
+CSV file for DNS downtime history.
+
 .SH SEE ALSO
-ping(8), nslookup(1), curl(1)
+.BR ping (8),
+.BR nslookup (1),
+.BR curl (1)
