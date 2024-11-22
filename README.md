@@ -22,7 +22,7 @@ NoirNet monitors internet and DNS access and sends notifications. It supports va
 - [x] Track downtime in CSV formatted files
 - [ ] Output average downtime
 - [ ] Add average downtime to notifications
-- [ ] Full downtime report
+- [ ] Full historical downtime report
 - [ ] Allow heartbeat notifications every hour (fully configurable)
 
 ## Requirements
