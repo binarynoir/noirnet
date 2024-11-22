@@ -5,8 +5,8 @@
 # License: MIT License
 
 # App version and name
-VERSION=1.0.1
 APP_NAME="NoirNet"
+VERSION=1.0.1
 LAST_UPDATED="2024-11-22"
 
 # Default configuration file location
