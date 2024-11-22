@@ -6,7 +6,7 @@
 
 # App version and name
 APP_NAME="NoirNet"
-VERSION=1.0.1
+VERSION=1.0.2
 LAST_UPDATED="2024-11-22"
 
 # Default configuration file location
@@ -416,7 +416,7 @@ start_service() {
 
     # Launch the service as a background process in a subshell
     (
-        monitor_network >/dev/null 2>&1 &
+        start_monitor >/dev/null 2>&1 &
         local service_pid=$!
 
         # Sleep briefly to ensure the background process has initialized
