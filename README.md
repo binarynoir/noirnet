@@ -290,7 +290,7 @@ NoirNet uses a configuration file to store default settings. The default locatio
 ### Example Configuration File
 
 ```bash
-# NoirWatch Configuration File
+# NoirNet Configuration File
 CACHE_DIR="/tmp/noirnet_cache"
 LOG_FILE="/tmp/noirnet_cache/noirnet.log"
 CONFIG_FILE="$HOME/.config/noirnet.conf"
@@ -375,7 +375,7 @@ Ensure you have the following installed on your system:
 2. **Update the Test Configuration File:** Open the test_noirnet.conf file in your preferred text editor and ensure it contains the following configuration:
 
    ```bash
-   # NoirWatch Configuration File
+   # NoirNet Configuration File
    CONFIG_FILE="./test_noirnet.conf"
    CACHE_DIR="./test_cache"
    LOG_FILE="./test_noirnet.log"
