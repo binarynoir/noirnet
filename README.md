@@ -295,8 +295,6 @@ CACHE_DIR="/tmp/noirnet_cache"
 LOG_FILE="/tmp/noirnet_cache/noirnet.log"
 CONFIG_FILE="$HOME/.config/noirnet.conf"
 CHECK_INTERVAL=5
-PING_TARGET="8.8.8.8"
-DNS_TEST_DOMAIN="example.com"
 TIMEOUT=5
 PUSHOVER_NOTIFICATION=false
 PUSHOVER_API_TOKEN=""
@@ -304,6 +302,8 @@ PUSHOVER_USER_KEY=""
 DESKTOP_NOTIFICATION=true
 VERBOSE=false
 LOG_LEVEL="INFO"
+PING_TARGET="8.8.8.8"
+DNS_TEST_DOMAIN="example.com"
 ```
 
 ## Options
@@ -380,12 +380,13 @@ Ensure you have the following installed on your system:
    CACHE_DIR="./test_cache"
    LOG_FILE="./test_noirnet.log"
    CHECK_INTERVAL=1
-   PING_TARGET="8.8.8.8"
-   DNS_TEST_DOMAIN="example.com"
+   TIMEOUT=5
    PUSHOVER=false
    DESKTOP=false
    VERBOSE=true
    LOG_LEVEL="DEBUG"
+   PING_TARGET="8.8.8.8"
+   DNS_TEST_DOMAIN="example.com"
    ```
 
 3. **Make the test script executable**:
