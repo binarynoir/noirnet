@@ -3,7 +3,7 @@
 # Test script for NoirNet
 
 # Default test configuration file and directories
-DEFAULT_TEST_CONFIG_FILE="./test_noirnetrc"
+DEFAULT_TEST_CONFIG_FILE="./test_noirnet.conf"
 TEST_CACHE_DIR="./test_cache"
 TEST_LOG_FILE="./test_noirnet.log"
 
