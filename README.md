@@ -382,7 +382,6 @@ Ensure you have the following installed on your system:
    CHECK_INTERVAL=1
    PING_TARGET="8.8.8.8"
    DNS_TEST_DOMAIN="example.com"
-   THRESHOLD=1
    PUSHOVER=false
    DESKTOP=false
    VERBOSE=true
