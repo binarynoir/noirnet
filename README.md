@@ -383,7 +383,6 @@ Ensure you have the following installed on your system:
    PING_TARGET="8.8.8.8"
    DNS_TEST_DOMAIN="example.com"
    THRESHOLD=1
-   BACKGROUND=false
    PUSHOVER=false
    DESKTOP=false
    VERBOSE=true
