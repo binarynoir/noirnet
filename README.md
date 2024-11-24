@@ -281,7 +281,7 @@ Run the script with the desired options. Below are some examples:
 
 ## Configuration
 
-NoirNet uses a configuration file to store default settings. The default location is `$HOME/.config/noirwatch.conf`. You can initialize a configuration file with default settings using:
+NoirNet uses a configuration file to store default settings. The default location is `$HOME/.config/noirnet.conf`. You can initialize a configuration file with default settings using:
 
 ```bash
 ./noirnet --init
@@ -292,7 +292,7 @@ NoirNet uses a configuration file to store default settings. The default locatio
 ```bash
 # NoirWatch Configuration File
 CACHE_DIR="/tmp/noirnet_cache"
-LOG_FILE="/tmp/noirwatch_cache/noirnet.log"
+LOG_FILE="/tmp/noirnet_cache/noirnet.log"
 CONFIG_FILE="$HOME/.config/noirnet.conf"
 CHECK_INTERVAL=5
 PING_TARGET="8.8.8.8"
