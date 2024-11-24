@@ -353,7 +353,7 @@ LOG_LEVEL="INFO"
 - `-t, --stop`: Stop the network check service.
 - `-z, --status`: Check the current status of the network check service.
 
-## Test Instructions
+## Instructions for Running the Tests
 
 This document provides instructions for running the quality assurance tests for the NoirNet script using the `test.sh` file.
 
