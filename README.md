@@ -80,7 +80,7 @@ NoirNet monitors internet and DNS access and sends notifications. It supports va
 
 ### Windows Installation
 
-1. Install Git for Windows (includes Git Bash, if not installed).
+1. Install [Git for Windows](https://gitforwindows.org/) (includes Git Bash, if not installed).
 
 2. Clone the repository:
 
@@ -116,42 +116,6 @@ NoirNet monitors internet and DNS access and sends notifications. It supports va
    ```bash
    man noirnet
    ```
-
-## Usage
-
-Run the script with the desired options. Below are some examples:
-
-- Start monitoring with default settings:
-
-  ```bash
-  ./noirnet
-  ```
-
-- Specify a custom configuration file:
-
-  ```bash
-  ./noirnet --config /path/to/config
-  ```
-
-- Run the script in the background:
-
-  ```bash
-  ./noirnet --start
-  ```
-
-- Send Pushover notifications:
-
-  ```bash
-  ./noirnet --pushover --api-token YOUR_API_TOKEN --user-key YOUR_USER_KEY
-  ```
-
-## Configuration
-
-NoirNet uses a configuration file to store default settings. The default location is `~/.noirnetrc`. You can initialize a configuration file with default settings using:
-
-```bash
-./noirnet --init
-```
 
 ## Setting Up as a Service
 
@@ -287,6 +251,61 @@ NoirNet uses a configuration file to store default settings. The default locatio
    - Check the status of the task in Task Scheduler to ensure it is running.
    - Verify that NoirNet is running by checking the log file or the expected notifications.
 
+## Usage
+
+Run the script with the desired options. Below are some examples:
+
+- Start monitoring with default settings:
+
+  ```bash
+  ./noirnet
+  ```
+
+- Specify a custom configuration file:
+
+  ```bash
+  ./noirnet --config /path/to/config
+  ```
+
+- Run the script in the background:
+
+  ```bash
+  ./noirnet --start
+  ```
+
+- Send Pushover notifications:
+
+  ```bash
+  ./noirnet --pushover --api-token YOUR_API_TOKEN --user-key YOUR_USER_KEY
+  ```
+
+## Configuration
+
+NoirNet uses a configuration file to store default settings. The default location is `$HOME/.config/noirwatch.conf`. You can initialize a configuration file with default settings using:
+
+```bash
+./noirnet --init
+```
+
+### Example Configuration File
+
+```bash
+# NoirWatch Configuration File
+CACHE_DIR="/tmp/noirnet_cache"
+LOG_FILE="/tmp/noirwatch_cache/noirnet.log"
+CONFIG_FILE="$HOME/.config/noirnet.conf"
+CHECK_INTERVAL=5
+PING_TARGET="8.8.8.8"
+DNS_TEST_DOMAIN="example.com"
+TIMEOUT=5
+PUSHOVER_NOTIFICATION=false
+PUSHOVER_API_TOKEN=""
+PUSHOVER_USER_KEY=""
+DESKTOP_NOTIFICATION=true
+VERBOSE=false
+LOG_LEVEL="INFO"
+```
+
 ## Options
 
 ### General Options
@@ -307,9 +326,8 @@ NoirNet uses a configuration file to store default settings. The default locatio
 - `-C, --clean`: Delete all cached files.
 - `-k, --cache-dir <path>`: Specify a custom cache directory.
 
-### Execution Options
+### Notification Options
 
-- `-i, --interval <seconds>`: Set the interval between checks (default: 60 seconds).
 - `-p, --pushover`: Send Pushover notifications.
 - `-a, --api-token <token>`: Specify the API token for Pushover notifications.
 - `-u, --user-key <key>`: Specify the user key for Pushover notifications.
@@ -324,6 +342,7 @@ NoirNet uses a configuration file to store default settings. The default locatio
 
 ### Network Check Configuration
 
+- `-i, --interval <seconds>`: Set the interval between checks (default: 60 seconds).
 - `-P, --ping-target <IP>`: Set a custom ping target (default: 8.8.8.8).
 - `-D, --dns-test-domain <domain>`: Set a custom DNS test domain (default: example.com).
 - `-T, --timeout <seconds>`: Set the timeout for ping and DNS tests (default: 5 seconds).
@@ -350,28 +369,46 @@ Ensure you have the following installed on your system:
 1. **Navigate to the Test Directory**:
 
    ```bash
-   cd path/to/noirnet
+   cd test
    ```
 
-2. **Make the test script executable**:
+2. **Update the Test Configuration File:** Open the test_noirnet.conf file in your preferred text editor and ensure it contains the following configuration:
+
+   ```bash
+   # NoirWatch Configuration File
+   CONFIG_FILE="./test_noirnet.conf"
+   CACHE_DIR="./test_cache"
+   LOG_FILE="./test_noirnet.log"
+   CHECK_INTERVAL=1
+   PING_TARGET="8.8.8.8"
+   DNS_TEST_DOMAIN="example.com"
+   THRESHOLD=1
+   BACKGROUND=false
+   PUSHOVER=false
+   DESKTOP=false
+   VERBOSE=true
+   LOG_LEVEL="DEBUG"
+   ```
+
+3. **Make the test script executable**:
 
    ```bash
    chmod +x test.sh
    ```
 
-3. **Run the Test Script with Default Configuration**:
+4. **Run the Test Script with Default Configuration**:
 
    ```bash
    ./test.sh
    ```
 
-4. **Run the Test Script with a Custom Configuration File**:
+5. **Run the Test Script with a Custom Configuration File**:
 
    ```bash
    ./test.sh /path/to/custom_config_file
    ```
 
-5. **Clean Up Test Files (optional)**:
+6. **Clean Up Test Files (optional)**:
 
    ```bash
    rm -rf ./test_cache
