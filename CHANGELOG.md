@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - none
 
+## [1.1.0] - 2024-11-23
+
+### Added
+
+- Fatal error messages
+- Default test configuration file
+
+### Changed
+
+- Default configuration file path to `$HOME/.config/noirnet.conf`
+- Test script to the latest version of application and added additional testing
+- README.md with latest information
+
 ## [1.0.4] - 2024-11-21
 
 ### Fixed
