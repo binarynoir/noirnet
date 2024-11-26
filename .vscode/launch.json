@@ -10,6 +10,7 @@
             "name": "Bash-Debug (simplest configuration)",
             "program": "${file}",
             "argsString": " -v -L DEBUG"
+            // "argsString": " --status"
             // "argsString": "-L TRACE" // test invalid log level
             // "argsString": "--clean" // test clean
         }

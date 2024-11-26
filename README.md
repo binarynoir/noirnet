@@ -296,6 +296,7 @@ LOG_FILE="/tmp/noirnet_cache/noirnet.log"
 CONFIG_FILE="$HOME/.config/noirnet.conf"
 CHECK_INTERVAL=5
 TIMEOUT=5
+SYSTEM_NAME="My System"
 PUSHOVER_NOTIFICATION=false
 PUSHOVER_API_TOKEN=""
 PUSHOVER_USER_KEY=""
@@ -328,6 +329,7 @@ DNS_TEST_DOMAIN="example.com"
 
 ### Notification Options
 
+- `-n, --system-name`:  Name of the system running the script.
 - `-p, --pushover`: Send Pushover notifications.
 - `-a, --api-token <token>`: Specify the API token for Pushover notifications.
 - `-u, --user-key <key>`: Specify the user key for Pushover notifications.
@@ -381,6 +383,7 @@ Ensure you have the following installed on your system:
    LOG_FILE="./test_noirnet.log"
    CHECK_INTERVAL=1
    TIMEOUT=5
+   SYSTEM_NAME="test system"
    PUSHOVER=false
    DESKTOP=false
    VERBOSE=true
