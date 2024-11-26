@@ -10,6 +10,7 @@
         "osascript",
         "pacman",
         "pkill",
+        "realpath",
         "subshell"
     ]
 }
