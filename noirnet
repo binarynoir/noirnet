@@ -547,7 +547,7 @@ start_service() {
     ) &
 
     # The service is now running in the background
-    log_message "INFO" "$APP_NAME service is running in the background."
+    log_message "INFO" "$APP_NAME service is running in the background." "$LINENO"
 }
 
 # Function: Stop the service
