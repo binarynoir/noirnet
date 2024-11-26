@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- none
+### Changed
+
+- Order of Pushover user key and api token
 
 ## [1.2.0] - 2024-11-26
 

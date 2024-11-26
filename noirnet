@@ -55,8 +55,8 @@ TIMEOUT=5
 
 # Pushover notification options
 PUSHOVER_NOTIFICATION=false
-PUSHOVER_API_TOKEN=
 PUSHOVER_USER_KEY=
+PUSHOVER_API_TOKEN=
 
 # Native desktop notification options
 DESKTOP_NOTIFICATION=true
@@ -715,8 +715,8 @@ TIMEOUT=$TIMEOUT
 # Notification Settings
 SYSTEM_NAME="$SYSTEM_NAME"
 PUSHOVER_NOTIFICATION=$PUSHOVER_NOTIFICATION
-PUSHOVER_API_TOKEN="$PUSHOVER_API_TOKEN"
 PUSHOVER_USER_KEY="$PUSHOVER_USER_KEY"
+PUSHOVER_API_TOKEN="$PUSHOVER_API_TOKEN"
 DESKTOP_NOTIFICATION=$DESKTOP_NOTIFICATION
 
 # Logging Settings
@@ -786,8 +786,8 @@ show_help() {
     printf "\nNotification Options:\n"
     printf "  -n, --system-name           Name of the system running the script (default: %s).\n" "${SYSTEM_NAME}"
     printf "  -p, --pushover              Send Pushover notifications.\n"
-    printf "  -a, --api-token <token>     Specify the API token for Pushover notifications.\n"
     printf "  -u, --user-key <key>        Specify the user key for Pushover notifications.\n"
+    printf "  -a, --api-token <token>     Specify the API token for Pushover notifications.\n"
     printf "  -d, --desktop               Send desktop notifications using AppleScript.\n"
 
     # Logging and Output
@@ -904,20 +904,20 @@ parse_arguments() {
         --pushover | -p)
             CLI_PUSHOVER_NOTIFICATION=true
             ;;
-        --api-token | -a)
-            if [[ -z "$2" || "$2" == -* ]]; then
-                printf "Error: %s requires a value\n" "$1" >&2
-                exit 1
-            fi
-            CLI_PUSHOVER_API_TOKEN="$2"
-            shift
-            ;;
         --user-key | -u)
             if [[ -z "$2" || "$2" == -* ]]; then
                 printf "Error: %s requires a value\n" "$1" >&2
                 exit 1
             fi
             CLI_PUSHOVER_USER_KEY="$2"
+            shift
+            ;;
+        --api-token | -a)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                printf "Error: %s requires a value\n" "$1" >&2
+                exit 1
+            fi
+            CLI_PUSHOVER_API_TOKEN="$2"
             shift
             ;;
         --desktop | -d)
@@ -1067,8 +1067,8 @@ process_arguments() {
     [[ "$SHOW_LOG" = true ]] && show_log
     [[ -n "$CLI_SYSTEM_NAME" ]] && SYSTEM_NAME="$CLI_SYSTEM_NAME"
     [[ -n "$CLI_PUSHOVER_NOTIFICATION" ]] && PUSHOVER_NOTIFICATION="$CLI_PUSHOVER_NOTIFICATION"
-    [[ -n "$CLI_PUSHOVER_API_TOKEN" ]] && PUSHOVER_API_TOKEN="$CLI_PUSHOVER_API_TOKEN"
     [[ -n "$CLI_PUSHOVER_USER_KEY" ]] && PUSHOVER_USER_KEY="$CLI_PUSHOVER_USER_KEY"
+    [[ -n "$CLI_PUSHOVER_API_TOKEN" ]] && PUSHOVER_API_TOKEN="$CLI_PUSHOVER_API_TOKEN"
     [[ -n "$CLI_DESKTOP_NOTIFICATION" ]] && DESKTOP_NOTIFICATION="$CLI_DESKTOP_NOTIFICATION"
     [[ -n "$CLI_CHECK_INTERVAL" ]] && CHECK_INTERVAL="$CLI_CHECK_INTERVAL"
     [[ -n "$CLI_TIMEOUT" ]] && TIMEOUT="$CLI_TIMEOUT"

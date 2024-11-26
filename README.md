@@ -276,7 +276,7 @@ Run the script with the desired options. Below are some examples:
 - Send Pushover notifications:
 
   ```bash
-  ./noirnet --pushover --api-token YOUR_API_TOKEN --user-key YOUR_USER_KEY
+  ./noirnet --pushover --user-key YOUR_USER_KEY --api-token YOUR_API_TOKEN
   ```
 
 ## Configuration
@@ -298,8 +298,8 @@ CHECK_INTERVAL=5
 TIMEOUT=5
 SYSTEM_NAME="My System"
 PUSHOVER_NOTIFICATION=false
-PUSHOVER_API_TOKEN=""
 PUSHOVER_USER_KEY=""
+PUSHOVER_API_TOKEN=""
 DESKTOP_NOTIFICATION=true
 VERBOSE=false
 LOG_LEVEL="INFO"
@@ -329,10 +329,10 @@ DNS_TEST_DOMAIN="example.com"
 
 ### Notification Options
 
-- `-n, --system-name`:  Name of the system running the script.
+- `-n, --system-name`: Name of the system running the script.
 - `-p, --pushover`: Send Pushover notifications.
-- `-a, --api-token <token>`: Specify the API token for Pushover notifications.
 - `-u, --user-key <key>`: Specify the user key for Pushover notifications.
+- `-a, --api-token <token>`: Specify the API token for Pushover notifications.
 - `-d, --desktop`: Send desktop notifications using AppleScript.
 
 ### Logging and Output
