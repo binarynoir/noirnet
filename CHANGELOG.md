@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- none
+
+## [1.2.1] - 2024-11-26
+
 ### Changed
 
 - Order of Pushover user key and api token
+
+### Fixed
+
+- Help output not displaying proper timeout defaults
+- Missing details in man page
 
 ## [1.2.0] - 2024-11-26
 
