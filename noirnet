@@ -6,8 +6,11 @@
 
 # App version and name
 APP_NAME="NoirNet"
-VERSION=1.2.0
+VERSION=1.2.1
 LAST_UPDATED="2024-11-26"
+
+# TODO:
+#  - Add more notification methods (email, slack, discord, etc.)
 
 # ==============================
 # Application Specific Variables
@@ -461,9 +464,9 @@ send_pushover_notification() {
     local response
 
     if [ "$PUSHOVER_NOTIFICATION" = true ]; then
-        log_message "DEBUG" " Processing Pushover notification: $website_url" "$LINENO"
-        log_message "DEBUG" " Url: $website_url" "$LINENO"
-        log_message "DEBUG" " Message: $message" "$LINENO"
+        log_message "DEBUG" "- Processing Pushover notification: $website_url" "$LINENO"
+        log_message "DEBUG" "- Url: $website_url" "$LINENO"
+        log_message "DEBUG" "- Message: $message" "$LINENO"
 
         # Check if PUSHOVER_API_TOKEN is set
         if [[ -z "$PUSHOVER_API_TOKEN" ]]; then
@@ -508,7 +511,7 @@ send_pushover_notification() {
             return 1
         fi
 
-        log_message "DEBUG" " Pushover notification sent successfully." "$LINENO"
+        log_message "DEBUG" "- Pushover notification sent successfully." "$LINENO"
         return 0
     fi
 }
@@ -799,10 +802,10 @@ show_help() {
 
     # Network Check Configuration
     printf "\nNetwork Check Configuration:\n"
-    printf "  -i, --interval <seconds>    Set the interval between checks (default: %d seconds).\n" "${CHECK_INTERVAL:-5}"
-    printf "  -T, --timeout <seconds>     Set the timeout for ping and DNS tests (default: %d seconds).\n" "${DNS_TEST_TIMEOUT:-5}"
-    printf "  -P, --ping-target <IP>      Set a custom ping target (default: %s).\n" "${PING_TARGET:-8.8.8.8}"
-    printf "  -D, --dns-test-domain <domain>  Set a custom DNS test domain (default: %s).\n" "${DNS_TEST_DOMAIN:-example.com}"
+    printf "  -i, --interval <seconds>    Set the interval between checks (default: %d seconds).\n" "${CHECK_INTERVAL}"
+    printf "  -T, --timeout <seconds>     Set the connection timeout for remote connections (default: %d seconds).\n" "${TIMEOUT}"
+    printf "  -P, --ping-target <IP>      Set a custom ping target (default: %s).\n" "${PING_TARGET}"
+    printf "  -D, --dns-test-domain <domain>  Set a custom DNS test domain (default: %s).\n" "${DNS_TEST_DOMAIN}"
 
     # Process Management Functions
     printf "\nProcess Management:\n"
