@@ -345,9 +345,9 @@ DNS_TEST_DOMAIN="example.com"
 ### Network Check Configuration
 
 - `-i, --interval <seconds>`: Set the interval between checks (default: 60 seconds).
+- `-T, --timeout <seconds>`: Set the timeout for ping and DNS tests (default: 5 seconds).
 - `-P, --ping-target <IP>`: Set a custom ping target (default: 8.8.8.8).
 - `-D, --dns-test-domain <domain>`: Set a custom DNS test domain (default: example.com).
-- `-T, --timeout <seconds>`: Set the timeout for ping and DNS tests (default: 5 seconds).
 
 ### Process Management
 
