@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - none
 
+## [1.2.2] - 2024-11-27
+
+### Fixed
+
+- Initialization of config uses old config for new settings file
+
 ## [1.2.1] - 2024-11-26
 
 ### Changed

@@ -6,8 +6,8 @@
 
 # App version and name
 APP_NAME="NoirNet"
-VERSION=1.2.1
-LAST_UPDATED="2024-11-26"
+VERSION=1.2.2
+LAST_UPDATED="2024-11-27"
 
 # TODO:
 #  - Add more notification methods (email, slack, discord, etc.)
@@ -1047,7 +1047,7 @@ process_arguments() {
     [[ "$SHOW_HELP" = true ]] && show_help
 
     # Override config settings with command line options
-    load_config "$CONFIG_FILE"
+    [[ "$INIT" = false ]] && load_config "$CONFIG_FILE"
     [[ -n "$CLI_VERBOSE" ]] && VERBOSE="$CLI_VERBOSE"
     [[ -n "$CLI_CACHE_DIR" ]] && CACHE_DIR="$CLI_CACHE_DIR"
 
