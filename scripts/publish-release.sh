@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 
-# Extract the version number from the noirnet script
-VERSION=$(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' noirnet | cut -d '=' -f 2)
+APP_SCRIPT="noirnet"
+
+# Extract the version number from the application script
+VERSION=$(grep -Eo 'VERSION=[0-9]+\.[0-9]+\.[0-9]+' $APP_SCRIPT | cut -d '=' -f 2)
 
 # Check if the version number was found
 if [ -z "$VERSION" ]; then
-    echo "Version number not found in noirnet script."
+    echo "Version number not found in $APP_SCRIPT script."
     exit 1
 fi
-
-REPO="binarynoir/noirnet"
 
 # Ensure repo is up-to-date
 git pull
