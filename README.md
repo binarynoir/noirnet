@@ -318,15 +318,15 @@ DNS_TEST_DOMAIN="example.com"
 ### Configuration and Initialization
 
 - `-c, --config <config_file>`: Specify a custom configuration file.
-- `-I, --init`: Initialize the configuration file.
-- `-F, --force-init`: Force initialize the configuration file if one exists.
-- `-s, --show-config`: Show the configuration settings.
-- `-S, --show-config-file`: Show the configuration file.
+- `-i, --init`: Initialize the configuration file.
+- `-f, --force-init`: Force initialize the configuration file if one exists.
+- `-S, --show-config`: Show the configuration settings.
+- `-e, --show-config-file`: Show the configuration file.
 
 ### Cache Management
 
-- `-C, --clean`: Delete all cached files.
-- `-k, --cache-dir <path>`: Specify a custom cache directory.
+- `-x, --clean`: Delete all cached files.
+- `-C, --cache-dir <path>`: Specify a custom cache directory.
 
 ### Notification Options
 
@@ -343,18 +343,19 @@ DNS_TEST_DOMAIN="example.com"
 - `-o, --output <file>`: Specify a custom log file location.
 - `-L, --log-level <level>`: Set the log level (FATAL, ERROR, WARN, INFO, DEBUG).
 
-### Network Check Configuration
+### Remote Connection Configuration
 
-- `-i, --interval <seconds>`: Set the interval between checks (default: 60 seconds).
-- `-T, --timeout <seconds>`: Set the timeout for ping and DNS tests (default: 5 seconds).
+- `-I, --interval <seconds>`: Set the interval between checks (default: 60 seconds).
+- `-T, --timeout <seconds>`: Set the connection timeout for remote connections (default: 5 seconds).
 - `-P, --ping-target <IP>`: Set a custom ping target (default: 8.8.8.8).
 - `-D, --dns-test-domain <domain>`: Set a custom DNS test domain (default: example.com).
 
 ### Process Management
 
-- `-r, --start`: Start the network check service in the background.
-- `-t, --stop`: Stop the network check service.
-- `-z, --status`: Check the current status of the network check service.
+- `-s, --start`: Start the AppName service in the background.
+- `-k, --stop`: Stop the AppName service.
+- `-r, --restart`: Restart the AppName service.
+- `-t, --status`: Check the current status of the AppName service.
 
 ## Instructions for Running the Tests
 
