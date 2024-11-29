@@ -6,7 +6,7 @@
 
 # App version and name
 APP_NAME="NoirNet"
-VERSION=1.3.0
+VERSION=1.3.1
 LAST_UPDATED="2024-11-29"
 
 # TODO:
@@ -1068,7 +1068,9 @@ process_arguments() {
     [[ "$SHOW_HELP" = true ]] && show_help
 
     # Override config settings with command line options
-    [[ "$INIT" = false ]] && load_config "$CONFIG_FILE"
+    if [[ -z "$INIT" || "$INIT" = false ]]; then
+        load_config "$CONFIG_FILE"
+    fi
     [[ -n "$CLI_VERBOSE" ]] && VERBOSE="$CLI_VERBOSE"
     [[ -n "$CLI_CACHE_DIR" ]] && CACHE_DIR="$CLI_CACHE_DIR"
 
@@ -1098,8 +1100,8 @@ process_arguments() {
     [[ -n "$CLI_TIMEOUT" ]] && TIMEOUT="$CLI_TIMEOUT"
     [[ -n "$CLI_PING_TARGET" ]] && PING_TARGET="$CLI_PING_TARGET"
     [[ -n "$CLI_DNS_TEST_DOMAIN" ]] && DNS_TEST_DOMAIN="$CLI_DNS_TEST_DOMAIN"
-    [[ "$SHOW_CONFIG" = true ]] && show_config && show_version && exit
     [[ "$SHOW_CONFIG_FILE" = true ]] && show_config_file
+    [[ "$SHOW_CONFIG" = true ]] && show_config && show_version && exit
     [[ "$INIT" = true ]] && init_config
 }
 
