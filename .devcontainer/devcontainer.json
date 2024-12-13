@@ -7,6 +7,9 @@
 	"features": {
 		"ghcr.io/cirolosapio/devcontainers-features/alpine-bash:0": {}
 	},
+	"mounts": [
+		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/node/.ssh,type=bind,consistency=cached"
+	],
 	"customizations": {
 		"vscode": {
 			"extensions": [
