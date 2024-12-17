@@ -1,7 +1,7 @@
 # Brewfile for NoirNet project
 
 # Install bash
-brew install bash
+brew install bash coreutils
 
 # Custom script setup
 system "curl -o /usr/local/bin/noirnet https://raw.githubusercontent.com/binarynoir/noirnet/main/noirnet"

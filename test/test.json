@@ -1,0 +1,17 @@
+{
+    "configuration": {
+        "CACHE_DIR": "./test/cache/",
+        "LOG_FILE": "./test/cache/test.log",
+        "CHECK_INTERVAL": "60s",
+        "TIMEOUT": "5s",
+        "SYSTEM_NAME": "test system",
+        "PUSHOVER_NOTIFICATION": "false",
+        "PUSHOVER_USER_KEY": "",
+        "PUSHOVER_API_TOKEN": "",
+        "DESKTOP_NOTIFICATION": "true",
+        "VERBOSE": "false",
+        "LOG_LEVEL": "INFO",
+        "PING_TARGET": "8.8.8.8",
+        "DNS_TEST_DOMAIN: "example.com"
+    }
+}

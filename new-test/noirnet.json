@@ -1,0 +1,17 @@
+{
+    "configuration": {
+        "CACHE_DIR": "/Users/jjsmith/Development/business/noirnet/new-test/cache",
+        "LOG_FILE": "/Users/jjsmith/Development/business/noirnet/new-test/cache/noirnet.log",
+        "CHECK_INTERVAL": "60s",
+        "TIMEOUT": "5s",
+        "SYSTEM_NAME": "Johns-MacBook-Pro.local",
+        "PUSHOVER_NOTIFICATION": "false",
+        "PUSHOVER_USER_KEY": "",
+        "PUSHOVER_API_TOKEN": "",
+        "DESKTOP_NOTIFICATION": "false",
+        "VERBOSE": "true",
+        "LOG_LEVEL": "DEBUG",
+        "PING_TARGET": "8.8.8.8",
+        "DNS_TEST_DOMAIN": "example.com"
+	}
+}

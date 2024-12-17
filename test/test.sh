@@ -3,9 +3,9 @@
 # Test script for NoirNet
 
 # Default test configuration file and directories
-DEFAULT_TEST_CONFIG_FILE="./test_noirnet.conf"
-TEST_CACHE_DIR="./test_cache"
-TEST_LOG_FILE="./test_noirnet.log"
+DEFAULT_TEST_CONFIG_FILE="./test.json"
+TEST_CACHE_DIR="./cache"
+TEST_LOG_FILE="./test.log"
 
 # Allow custom config file to be passed in
 TEST_CONFIG_FILE="$DEFAULT_TEST_CONFIG_FILE"
@@ -18,19 +18,24 @@ fi
 # Create a test configuration file
 create_test_config() {
     if [[ "$CUSTOM_CONFIG_FILE" = false ]]; then
-        cat <<EOF >"$TEST_CONFIG_FILE"
-# NoirNet Test Configuration File
-CONFIG_FILE="$TEST_CONFIG_FILE"
-CACHE_DIR="$TEST_CACHE_DIR"
-LOG_FILE="$TEST_LOG_FILE"
-CHECK_INTERVAL=1
-PING_TARGET="8.8.8.8"
-DNS_TEST_DOMAIN="example.com"
-TIMEOUT=1
-PUSHOVER_NOTIFICATION=false
-DESKTOP_NOTIFICATION=false
-VERBOSE=true
-LOG_LEVEL="DEBUG"
+        cat <<EOF >"
+    {
+        "configuration": {
+            "CACHE_DIR": "./test/cache/",
+            "LOG_FILE": "./test/cache/test.log",
+            "CHECK_INTERVAL": "60s",
+            "TIMEOUT": "5s",
+            "SYSTEM_NAME": "test system",
+            "PUSHOVER_NOTIFICATION": "false",
+            "PUSHOVER_USER_KEY": "",
+            "PUSHOVER_API_TOKEN": "",
+            "DESKTOP_NOTIFICATION": "true",
+            "VERBOSE": "false",
+            "LOG_LEVEL": "INFO",
+            "PING_TARGET": "8.8.8.8",
+            "DNS_TEST_DOMAIN: "example.com"
+        }
+    }
 EOF
     fi
 }

@@ -9,11 +9,12 @@ NoirNet monitors internet and DNS access and sends notifications. It supports va
 ## Features
 
 - Monitor internet and DNS access
-- Send notifications via Pushover and native desktop notifications (macOS, Linux, Windows)
+- Sends notifications via Pushover and native desktop notifications (macOS, Linux, Windows)
 - Configurable check intervals
 - Verbose logging with different log levels
 - Background execution support
 - Customizable configuration
+- Detailed error reporting
 
 ## Feature Roadmap
 
@@ -282,7 +283,7 @@ Run the script with the desired options. Below are some examples:
 
 ## Configuration
 
-NoirNet uses a configuration file to store default settings. The default location is `~/.config/noirnet.conf`. You can initialize a configuration file with default settings using:
+NoirNet uses a configuration file to store default settings. The default location is `~/.config/noirnet.json`. You can initialize a configuration file with default settings using:
 
 ```bash
 ./noirnet --init
@@ -290,22 +291,24 @@ NoirNet uses a configuration file to store default settings. The default locatio
 
 ### Example Configuration File
 
-```bash
-# NoirNet Configuration File
-CACHE_DIR="/tmp/noirnet_cache"
-LOG_FILE="/tmp/noirnet_cache/noirnet.log"
-CONFIG_FILE="~/.config/noirnet.conf"
-CHECK_INTERVAL=5
-TIMEOUT=5
-SYSTEM_NAME="My System"
-PUSHOVER_NOTIFICATION=false
-PUSHOVER_USER_KEY=""
-PUSHOVER_API_TOKEN=""
-DESKTOP_NOTIFICATION=true
-VERBOSE=false
-LOG_LEVEL="INFO"
-PING_TARGET="8.8.8.8"
-DNS_TEST_DOMAIN="example.com"
+```json
+{
+    "configuration": {
+        "CACHE_DIR": "/tmp/noirnet_cache",
+        "LOG_FILE": "/tmp/noirnet_cache/noirnet.log",
+        "CHECK_INTERVAL": "60s",
+        "TIMEOUT": "5s",
+        "SYSTEM_NAME": "test system",
+        "PUSHOVER_NOTIFICATION": "false",
+        "PUSHOVER_USER_KEY": "",
+        "PUSHOVER_API_TOKEN": "",
+        "DESKTOP_NOTIFICATION": "true",
+        "VERBOSE": "false",
+        "LOG_LEVEL": "INFO",
+        "PING_TARGET": "8.8.8.8",
+        "DNS_TEST_DOMAIN: "example.com"
+    }
+}
 ```
 
 ## Options
@@ -322,6 +325,7 @@ DNS_TEST_DOMAIN="example.com"
 - `-f, --force-init`: Force initialize the configuration file if one exists.
 - `-S, --show-config`: Show the configuration settings.
 - `-e, --show-config-file`: Show the configuration file.
+- `-E, --edit-config`: Edit the configuration file.
 
 ### Cache Management
 
@@ -330,7 +334,7 @@ DNS_TEST_DOMAIN="example.com"
 
 ### Notification Options
 
-- `-n, --system-name`: Name of the system running the script.
+- `-n, --system-name <name>`: Name of the system running the script.
 - `-p, --pushover`: Send Pushover notifications.
 - `-u, --user-key <key>`: Specify the user key for Pushover notifications.
 - `-a, --api-token <token>`: Specify the API token for Pushover notifications.
@@ -345,17 +349,50 @@ DNS_TEST_DOMAIN="example.com"
 
 ### Remote Connection Configuration
 
-- `-I, --interval <seconds>`: Set the interval between checks (default: 60 seconds).
-- `-T, --timeout <seconds>`: Set the connection timeout for remote connections (default: 5 seconds).
+- `-I, --interval <s,m,h,d>`: Set the interval between checks (default: 60 seconds).
+- `-T, --timeout <s,m,h,d>`: Set the connection timeout for remote connections (default: 5 seconds).
+- `-N, --repeat <number>`: Repeat the checks in interactive mode N number of times and exit (default: 0).
 - `-P, --ping-target <IP>`: Set a custom ping target (default: 8.8.8.8).
 - `-D, --dns-test-domain <domain>`: Set a custom DNS test domain (default: example.com).
 
 ### Process Management
 
-- `-s, --start`: Start the AppName service in the background.
-- `-k, --stop`: Stop the AppName service.
-- `-r, --restart`: Restart the AppName service.
-- `-t, --status`: Check the current status of the AppName service.
+- `-s, --start`: Start the NoirNet service in the background.
+- `-k, --stop`: Stop the NoirNet service.
+- `-r, --restart`: Restart the NoirNet service.
+- `-t, --status`: Check the current status of the NoirNet service.
+
+## Docker Deployment Instructions
+
+This guide provides step-by-step instructions to deploy the noirnet service using Docker.
+
+### Docker Prerequisites
+
+Ensure you have the following installed on your system:
+
+- Docker
+
+
+### Using the Dockerfile
+
+To download the `Dockerfile` from the GitHub repository, run the following command:
+
+```sh
+curl -O https://raw.githubusercontent.com/binarynoir/noirnet/main/Dockerfile
+```
+
+### Build and Deploy
+
+Navigate to the directory containing the `Dockerfile` and run the following command to build and start the service:
+
+```sh
+docker build -t noirnet-image .
+docker run -d --name noirnet noirnet-image
+```
+
+### Conclusion
+
+You have successfully deployed the noirnet service using Docker. The service will automatically start when the container is created and will restart if it stops unexpectedly. For any further modifications or assistance, feel free to ask!
 
 ## Instructions for Running the Tests
 
@@ -376,22 +413,26 @@ Ensure you have the following installed on your system:
    cd test
    ```
 
-2. **Update the Test Configuration File:** Open the test_noirnet.conf file in your preferred text editor and ensure it contains the following configuration:
+2. **Update the Test Configuration File**: Open the `test.json` file in your preferred text editor and ensure it contains the following configuration:
 
-   ```bash
-   # NoirNet Configuration File
-   CONFIG_FILE="./test_noirnet.conf"
-   CACHE_DIR="./test_cache"
-   LOG_FILE="./test_noirnet.log"
-   CHECK_INTERVAL=1
-   TIMEOUT=5
-   SYSTEM_NAME="test system"
-   PUSHOVER=false
-   DESKTOP=false
-   VERBOSE=true
-   LOG_LEVEL="DEBUG"
-   PING_TARGET="8.8.8.8"
-   DNS_TEST_DOMAIN="example.com"
+   ```json
+    {
+        "configuration": {
+            "CACHE_DIR": "./test/cache/",
+            "LOG_FILE": "./test/cache/test.log",
+            "CHECK_INTERVAL": "60s",
+            "TIMEOUT": "5s",
+            "SYSTEM_NAME": "test system",
+            "PUSHOVER_NOTIFICATION": "false",
+            "PUSHOVER_USER_KEY": "",
+            "PUSHOVER_API_TOKEN": "",
+            "DESKTOP_NOTIFICATION": "true",
+            "VERBOSE": "false",
+            "LOG_LEVEL": "INFO",
+            "PING_TARGET": "8.8.8.8",
+            "DNS_TEST_DOMAIN: "example.com"
+        }
+    }
    ```
 
 3. **Make the test script executable**:
@@ -416,7 +457,7 @@ Ensure you have the following installed on your system:
 
    ```bash
    rm -rf ./test_cache
-   rm -f ./test_noirnet.log
+   rm -f ./test.log
    ```
 
 ### Summary
@@ -431,19 +472,19 @@ Follow these instructions to ensure that NoirNet is functioning correctly. If yo
 
 ## Releases
 
-### Releasing new releases
+### Releasing New Versions
 
-- Update the changelog with new features and fixes
-- Commit all changed files and create a pull request
-- Run the release script from the project repo's root directory
+- Update the changelog with new features and fixes.
+- Commit all changed files and create a pull request.
+- Run the release script from the project repo's root directory:
 
   ```bash
   ./scripts/publish-release.md
   ```
 
-### Manually Releasing new releases
+### Manually Releasing New Versions
 
-- Create a new GitHub release using the new version number as the "Tag version". Use the exact version number and include a prefix `v`
+- Create a new GitHub release using the new version number as the "Tag version". Use the exact version number and include a prefix `v`.
 - Publish the release.
 
   ```bash
@@ -453,7 +494,7 @@ Follow these instructions to ensure that NoirNet is functioning correctly. If yo
   git push --tags
   ```
 
-Run shasum on the release for homebrew distribution.
+Run `shasum` on the release for homebrew distribution.
 
 ```bash
 shasum -a 256 noirnet-1.x.x.tar.gz
