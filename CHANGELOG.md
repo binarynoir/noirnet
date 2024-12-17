@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - none
 
+## [1.4.0] - 2024-12-17
+
+### Added
+
+- JSON based configuration files to support future functionality
+- Edit to configuration file function
+- Dockerfile to run as a service
+- Repeat function N amount of times and exit
+
+### Changed
+
+- Reorganized functions
+- Documentation reflects all new functionality
+- Desktop notifications are defaulted to false
+
+### Removed
+
+- No longer supporting bash based config files
+
+### Fixed
+
+- Improper formatting to console in some cases
+- Various issues running on linux
+
 ## [1.3.1] - 2024-11-29
 
 ### Fixed
