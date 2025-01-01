@@ -6,8 +6,8 @@
 
 # App version and name
 readonly APP_NAME="NoirNet"
-readonly VERSION=1.4.1
-readonly LAST_UPDATED="2024-12-30"
+readonly VERSION=1.4.2
+readonly LAST_UPDATED="2025-01-01"
 
 # TODO:
 #  - Add more notification methods (email, slack, discord, etc.)
