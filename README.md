@@ -387,7 +387,7 @@ Navigate to the directory containing the `Dockerfile` and run the following comm
 
 ```sh
 docker build -t noirnet-image .
-docker run -d --name noirnet noirnet-image
+docker run -d --restart unless-stopped --name noirnet noirnet-image
 ```
 
 ### Conclusion
