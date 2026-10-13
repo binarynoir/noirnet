@@ -1,12 +1,7 @@
-# Brewfile for NoirNet project
+# Development dependencies for NoirNet. Install them with: brew bundle
+# To install NoirNet itself, see the Homebrew instructions in README.md.
 
-# Install bash
-brew install bash coreutils
-
-# Custom script setup
-system "curl -o /usr/local/bin/noirnet https://raw.githubusercontent.com/binarynoir/noirnet/main/noirnet"
-system "chmod +x /usr/local/bin/noirnet"
-
-# Install the man page
-system "curl -o /usr/local/share/man/man1/noirnet.1 https://raw.githubusercontent.com/binarynoir/noirnet/main/noirnet.1"
-system "man -c /usr/local/share/man/man1/noirnet.1"
+brew "bash"
+brew "coreutils"
+brew "jq"
+brew "shellcheck"

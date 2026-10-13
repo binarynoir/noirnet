@@ -29,10 +29,12 @@ NoirNet monitors internet and DNS access and sends notifications. It supports va
 
 ## Requirements
 
-- Bash
-- `curl` for network requests
+- Bash 4.3+ (macOS ships Bash 3.2; install a newer one with `brew install bash`)
+- `curl` for Pushover notifications
+- `jq` for reading the configuration file
 - `ping` for network connectivity checks
-- `nslookup` for DNS resolution checks
+- `nslookup` for DNS resolution checks (`dnsutils` or `bind-tools` on Linux)
+- GNU `realpath` on Linux, or `grealpath` from `brew install coreutils` on macOS
 - `powershell` for Windows desktop notifications
 - `notify-send` for Linux desktop notifications
 
@@ -137,10 +139,8 @@ NoirNet monitors internet and DNS access and sends notifications. It supports va
    After=network.target
 
    [Service]
-   ExecStart=/path/to/noirnet --start
+   ExecStart=/path/to/noirnet
    WorkingDirectory=/path/to
-   StandardOutput=syslog
-   StandardError=syslog
    Restart=always
    User=your-username
 
@@ -149,6 +149,8 @@ NoirNet monitors internet and DNS access and sends notifications. It supports va
    ```
 
    Replace `/path/to/noirnet` with the actual path to the `noirnet` script and `your-username` with your actual username.
+
+   Do not add `--start` here. systemd runs NoirNet in the foreground and restarts it if it stops; `--start` would detach it from systemd. Logs go to the journal (`journalctl -u noirnet`) as well as the NoirNet log file.
 
 3. Reload systemd to apply the new service:
 
@@ -176,10 +178,12 @@ NoirNet monitors internet and DNS access and sends notifications. It supports va
 
 ### macOS
 
+Run NoirNet as a LaunchAgent so it runs as you, reads your configuration file, and can show desktop notifications.
+
 1. Create a launchd plist file:
 
    ```bash
-   sudo nano /Library/LaunchDaemons/com.noirnet.plist
+   nano ~/Library/LaunchAgents/com.noirnet.plist
    ```
 
 2. Add the following content to the plist file:
@@ -194,40 +198,40 @@ NoirNet monitors internet and DNS access and sends notifications. It supports va
        <key>ProgramArguments</key>
        <array>
            <string>/path/to/noirnet</string>
-           <string>--start</string>
        </array>
-       <key>WorkingDirectory</key>
-       <string>/path/to</string>
+       <key>EnvironmentVariables</key>
+       <dict>
+           <key>PATH</key>
+           <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+       </dict>
        <key>RunAtLoad</key>
        <true/>
        <key>KeepAlive</key>
        <true/>
-       <key>StandardOutPath</key>
-       <string>/var/log/noirnet.log</string>
        <key>StandardErrorPath</key>
-       <string>/var/log/noirnet.log</string>
+       <string>/tmp/noirnet.launchd.log</string>
    </dict>
    </plist>
    ```
 
-   Replace `/path/to/noirnet` with the actual path to the `noirnet` script.
+   Replace `/path/to/noirnet` with the actual path to the `noirnet` script. Do not add `--start`; launchd keeps NoirNet running in the foreground. The `PATH` entry lets launchd find Homebrew's Bash, because macOS's built-in Bash 3.2 cannot run NoirNet.
 
 3. Load the plist file to start the service:
 
    ```bash
-   sudo launchctl load /Library/LaunchDaemons/com.noirnet.plist
+   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.noirnet.plist
    ```
 
 4. Check the status of the service:
 
    ```bash
-   sudo launchctl list | grep com.noirnet
+   launchctl print gui/$(id -u)/com.noirnet | grep state
    ```
 
 5. To unload the service:
 
    ```bash
-   sudo launchctl unload /Library/LaunchDaemons/com.noirnet.plist
+   launchctl bootout gui/$(id -u)/com.noirnet
    ```
 
 ### Setting Up NoirNet as a Service on Windows
@@ -311,6 +315,14 @@ NoirNet uses a configuration file to store default settings. The default locatio
 }
 ```
 
+### Configuration Notes
+
+- `--init` creates the configuration file so only your user can read it, because it can hold your Pushover keys. Keep it out of version control.
+- Settings given on the command line override the configuration file.
+- Unknown keys in the `configuration` section are ignored with a warning, so a typo cannot change unrelated settings.
+- `CHECK_INTERVAL` and `TIMEOUT` take a whole number with an optional `s`, `m`, `h` or `d` suffix, such as `30s` or `5m`.
+- The cache directory must belong to your user. NoirNet refuses to use system directories, your home directory, or a directory owned by someone else.
+
 ## Options
 
 ### General Options
@@ -360,11 +372,11 @@ NoirNet uses a configuration file to store default settings. The default locatio
 - `-s, --start`: Start the NoirNet service in the background.
 - `-k, --stop`: Stop the NoirNet service.
 - `-r, --restart`: Restart the NoirNet service.
-- `-t, --status`: Check the current status of the NoirNet service.
+- `-t, --status`: Check the current status of the NoirNet service. Exits with code 0 when it is running and 3 when it is stopped.
 
 ## Docker Deployment Instructions
 
-This guide provides step-by-step instructions to deploy the noirnet service using Docker.
+This guide provides step-by-step instructions to deploy the NoirNet service using Docker.
 
 ### Docker Prerequisites
 
@@ -372,135 +384,68 @@ Ensure you have the following installed on your system:
 
 - Docker
 
-
-### Using the Dockerfile
-
-To download the `Dockerfile` from the GitHub repository, run the following command:
-
-```sh
-curl -O https://raw.githubusercontent.com/binarynoir/noirnet/main/Dockerfile
-```
-
 ### Build and Deploy
 
-Navigate to the directory containing the `Dockerfile` and run the following command to build and start the service:
+Clone the repository, then build the image from the repository root. The image contains the `noirnet` script from your checkout and runs it as an unprivileged user.
 
 ```sh
+git clone https://github.com/binarynoir/noirnet.git
+cd noirnet
 docker build -t noirnet-image .
 docker run -d --restart unless-stopped --name noirnet noirnet-image
 ```
 
-### Conclusion
+The image creates a default configuration at `/app/noirnet.json`. To use your own, mount it over that file:
 
-You have successfully deployed the noirnet service using Docker. The service will automatically start when the container is created and will restart if it stops unexpectedly. For any further modifications or assistance, feel free to ask!
+```sh
+docker run -d --restart unless-stopped --name noirnet \
+  -v "$PWD/noirnet.json:/app/noirnet.json:ro" noirnet-image
+```
+
+NoirNet runs in the foreground, so `docker logs noirnet` shows its output and `docker stop noirnet` shuts it down cleanly. Arguments after the image name are passed to NoirNet, for example `docker run --rm noirnet-image --show-config`.
 
 ## Instructions for Running the Tests
 
-This document provides instructions for running the quality assurance tests for the NoirNet script using the `test.sh` file.
+The tests run offline against local test servers, so they do not depend on outside websites.
 
 ### Prerequisites
 
-Ensure you have the following installed on your system:
-
-- Bash
-- Git (for cloning the repository)
+- Bash 4.3+ and the dependencies listed under [Requirements](#requirements)
+- `python3` for the local test web server
+- `shellcheck` to lint the scripts (optional)
 
 ### Steps to Run the Tests
 
-1. **Navigate to the Test Directory**:
+From the repository root:
 
-   ```bash
-   cd test
-   ```
+```bash
+./test/test.sh
+```
 
-2. **Update the Test Configuration File**: Open the `test.json` file in your preferred text editor and ensure it contains the following configuration:
+The script prints `ok` or `FAIL` for each check and exits with a non-zero status if any check fails. It works in a temporary directory and removes everything it creates when it exits.
 
-   ```json
-    {
-        "configuration": {
-            "CACHE_DIR": "./test/cache/",
-            "LOG_FILE": "./test/cache/test.log",
-            "CHECK_INTERVAL": "60s",
-            "TIMEOUT": "5s",
-            "SYSTEM_NAME": "test system",
-            "PUSHOVER_NOTIFICATION": "false",
-            "PUSHOVER_USER_KEY": "",
-            "PUSHOVER_API_TOKEN": "",
-            "DESKTOP_NOTIFICATION": "true",
-            "VERBOSE": "false",
-            "LOG_LEVEL": "INFO",
-            "PING_TARGET": "8.8.8.8",
-            "DNS_TEST_DOMAIN: "example.com"
-        }
-    }
-   ```
+To lint the scripts:
 
-3. **Make the test script executable**:
+```bash
+shellcheck -s bash noirnet test/*.sh scripts/*.sh
+```
 
-   ```bash
-   chmod +x test.sh
-   ```
-
-4. **Run the Test Script with Default Configuration**:
-
-   ```bash
-   ./test.sh
-   ```
-
-5. **Run the Test Script with a Custom Configuration File**:
-
-   ```bash
-   ./test.sh /path/to/custom_config_file
-   ```
-
-6. **Clean Up Test Files (optional)**:
-
-   ```bash
-   rm -rf ./test_cache
-   rm -f ./test.log
-   ```
-
-### Summary
-
-The `test.sh` script will:
-
-1. Create a test configuration file (default or custom).
-2. Run various tests to check the functionality of NoirNet, including configuration initialization, cache directory creation, log file creation, and network monitoring.
-3. Clean up the test files and directories after the tests are completed, except for the custom configuration file if it was passed in.
-
-Follow these instructions to ensure that NoirNet is functioning correctly. If you encounter any issues, please open an issue or submit a pull request on the GitHub repository.
+GitHub Actions runs the linter and the tests on Linux and macOS for every push and pull request.
 
 ## Releases
 
-### Releasing New Versions
+### Releasing new releases
 
-- Update the changelog with new features and fixes.
-- Commit all changed files and create a pull request.
-- Run the release script from the project repo's root directory:
+1. Update `VERSION` and `LAST_UPDATED` in the `noirnet` script.
+2. Add an entry for the new version to `CHANGELOG.md`.
+3. Commit the changes and merge them to `main`.
+4. Run the release script from the repository root:
 
-  ```bash
-  ./scripts/publish-release.md
-  ```
+   ```bash
+   ./scripts/publish-release.sh
+   ```
 
-### Manually Releasing New Versions
-
-- Create a new GitHub release using the new version number as the "Tag version". Use the exact version number and include a prefix `v`.
-- Publish the release.
-
-  ```bash
-  git checkout main
-  git pull
-  git tag -a v1.y.z -m "v1.y.z"
-  git push --tags
-  ```
-
-Run `shasum` on the release for homebrew distribution.
-
-```bash
-shasum -a 256 noirnet-1.x.x.tar.gz
-```
-
-The release will automatically be drafted.
+The script checks that the working tree is clean, that you are on `main`, and that the changelog has an entry for the version. It then tags the version and pushes the tag. The tag starts the release workflow, which runs CI, checks that the tag matches `VERSION`, creates the GitHub release, and updates the Homebrew formula.
 
 ## License
 

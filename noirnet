@@ -4,10 +4,19 @@
 # Author: John Smith III
 # License: MIT License
 
+# Require bash 4.3 or newer for associative arrays and namerefs.
+# This check uses POSIX syntax so older shells can still print the error.
+if [ -z "${BASH_VERSINFO:-}" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ] ||
+    { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -lt 3 ]; }; then
+    printf '%s requires bash 4.3 or newer (running %s).\n' "${0##*/}" "${BASH_VERSION:-unknown}" >&2
+    printf 'On macOS, install it with: brew install bash\n' >&2
+    exit 1
+fi
+
 # App version and name
 readonly APP_NAME="NoirNet"
-readonly VERSION=1.4.2
-readonly LAST_UPDATED="2025-01-01"
+readonly VERSION=1.5.0
+readonly LAST_UPDATED="2026-10-13"
 
 # TODO:
 #  - Add more notification methods (email, slack, discord, etc.)
@@ -17,8 +26,10 @@ readonly LAST_UPDATED="2025-01-01"
 # ==============================
 
 # CSV downtime history files
-NETWORK_CSV_FILE="network_downtime.csv"
-DNS_CSV_FILE="dns_downtime.csv"
+NETWORK_CSV_FILE_NAME="network_downtime.csv"
+DNS_CSV_FILE_NAME="dns_downtime.csv"
+NETWORK_CSV_FILE=""
+DNS_CSV_FILE=""
 
 # Default Google DNS
 PING_TARGET="8.8.8.8"
@@ -29,6 +40,9 @@ DNS_TEST_DOMAIN="example.com"
 # Application specific dependencies
 DEPENDENCIES=("nslookup" "ping")
 
+# Application specific configuration keys
+APP_CONFIG_KEYS=("PING_TARGET" "DNS_TEST_DOMAIN")
+
 # ==============================
 # Base Application Variables
 # ==============================
@@ -36,6 +50,13 @@ DEPENDENCIES=("nslookup" "ping")
 # Default configuration file location (full default path added during initialization)
 CONFIG_FILE_NAME="$(basename "$0").json"
 SKIP_CONFIG_KEYS=("PID_FILE")
+
+# Configuration keys that may be set from the configuration file
+CONFIG_KEYS=(
+    "CACHE_DIR" "LOG_FILE" "CHECK_INTERVAL" "TIMEOUT" "REPEAT" "SYSTEM_NAME"
+    "PUSHOVER_NOTIFICATION" "PUSHOVER_USER_KEY" "PUSHOVER_API_TOKEN" "DESKTOP_NOTIFICATION"
+    "VERBOSE" "LOG_LEVEL" "${APP_CONFIG_KEYS[@]}"
+)
 
 # Master directory to store all cache files (full default path added during initialization)
 CACHE_DIR="$(basename "$0")_cache"
@@ -49,6 +70,9 @@ PID_FILE_NAME="$(basename "$0").pid"
 
 # Service mode flag
 IS_SERVICE=false
+
+# PID of the current interruptible sleep
+SLEEP_PID=""
 
 # Default check interval (in seconds)
 CHECK_INTERVAL="60s"
@@ -82,16 +106,21 @@ VERBOSE=false
 # System host name
 SYSTEM_NAME=""
 
-# ANSI color codes
-readonly RED='\033[0;31m'
-readonly RED_BG='\033[41m'
-readonly GREEN='\033[0;32m'
-readonly GREEN_BG='\033[42m'
-readonly YELLOW='\033[1;33m'
-readonly YELLOW_BG='\033[43m'
-readonly ORANGE='\033[0;33m'
-readonly ORANGE_BG='\033[43m'
-readonly NC='\033[0m' # No Color
+# ANSI color codes (disabled when output is not a terminal or NO_COLOR is set)
+# shellcheck disable=SC2034 # Not every app uses every color
+if [[ -z "${NO_COLOR:-}" && (-t 1 || -t 2) ]]; then
+    readonly RED=$'\033[0;31m'
+    readonly RED_BG=$'\033[41m'
+    readonly GREEN=$'\033[0;32m'
+    readonly GREEN_BG=$'\033[42m'
+    readonly YELLOW=$'\033[1;33m'
+    readonly YELLOW_BG=$'\033[43m'
+    readonly ORANGE=$'\033[0;33m'
+    readonly ORANGE_BG=$'\033[43m'
+    readonly NC=$'\033[0m' # No Color
+else
+    readonly RED="" RED_BG="" GREEN="" GREEN_BG="" YELLOW="" YELLOW_BG="" ORANGE="" ORANGE_BG="" NC=""
+fi
 
 # ==============================
 # Utility Functions
@@ -123,6 +152,7 @@ check_dependencies() {
         ;;
     esac
 
+    local cmd
     for cmd in "${DEPENDENCIES[@]}"; do
         # Debug log for each dependency being checked
         log_message "DEBUG" "Checking if dependency '$cmd' is installed..." "$LINENO"
@@ -137,6 +167,19 @@ check_dependencies() {
 
     # Optional success debug log
     log_message "DEBUG" "All dependencies are installed." "$LINENO"
+}
+
+# Function: Check if an array contains a value
+array_contains() {
+    local needle="$1"
+    shift
+    local item
+
+    for item in "$@"; do
+        [[ "$item" == "$needle" ]] && return 0
+    done
+
+    return 1
 }
 
 # Function: Get system host name
@@ -180,8 +223,9 @@ normalize_path() {
         fi
         ;;
     cygwin* | msys* | win32*)
-        # Use PowerShell to resolve the path on Windows
-        normalized_path=$(powershell -NoProfile -Command "try { (Resolve-Path -LiteralPath '$path').Path } catch { [System.IO.Path]::GetFullPath('$path') }")
+        # Use PowerShell to resolve the path on Windows. Single quotes are doubled so the path stays a literal string.
+        local ps_path="${path//\'/\'\'}"
+        normalized_path=$(powershell -NoProfile -Command "try { (Resolve-Path -LiteralPath '$ps_path').Path } catch { [System.IO.Path]::GetFullPath('$ps_path') }")
         ;;
     *)
         echo "Unsupported OS: $OSTYPE" >&2
@@ -209,7 +253,7 @@ get_config_path() {
         config_dir="$HOME/.config"
         ;;
     cygwin* | msys* | win32*)
-        config_dir="$APPDATA\\"
+        config_dir="$APPDATA"
         ;;
     *)
         log_message "FATAL" "Unsupported OS: $OSTYPE" "$LINENO"
@@ -217,8 +261,7 @@ get_config_path() {
         ;;
     esac
 
-    local full_path="$config_dir/$append_path"
-    echo "$(normalize_path "$full_path")"
+    normalize_path "$config_dir/$append_path"
 }
 
 # Function: Get the temporary directory path
@@ -239,8 +282,7 @@ get_temp_path() {
         ;;
     esac
 
-    local full_path="$temp_dir/$append_path"
-    echo "$(normalize_path "$full_path")"
+    normalize_path "$temp_dir/$append_path"
 }
 
 # Function: Edit a specified file
@@ -257,10 +299,13 @@ edit_file() {
         exit 1
     fi
 
-    if [[ -n "$EDITOR" ]]; then
-        if command -v "$EDITOR" &>/dev/null; then
-            "$EDITOR" "$file"
-            exit 0
+    if [[ -n "${EDITOR:-}" ]]; then
+        # EDITOR may include arguments, such as "code --wait"
+        local editor_cmd
+        read -r -a editor_cmd <<<"$EDITOR"
+        if command -v "${editor_cmd[0]}" &>/dev/null; then
+            "${editor_cmd[@]}" "$file"
+            exit $?
         else
             log_message "FATAL" "Specified editor '$EDITOR' is not available." "$LINENO"
             exit 1
@@ -272,6 +317,10 @@ edit_file() {
         open "$file"
         ;;
     linux*)
+        if ! command -v xdg-open &>/dev/null; then
+            log_message "FATAL" "No editor found. Set the EDITOR environment variable, for example: EDITOR=nano" "$LINENO"
+            exit 1
+        fi
         xdg-open "$file"
         ;;
     cygwin* | msys* | win32*)
@@ -287,28 +336,24 @@ edit_file() {
 }
 
 # Function: Convert a frequency/interval string to seconds
+# Accepts a whole number with an optional unit: s (seconds), m (minutes), h (hours) or d (days).
 get_interval_in_seconds() {
-    local input_frequency="$1" # Input frequency/interval string
-    local interval             # Variable to store the converted interval in seconds
+    local input_frequency="$1"
 
-    # Check if the input is a number without any unit
-    if [[ "$input_frequency" =~ ^[0-9]+$ ]]; then
-        interval=$input_frequency # Default to seconds if no unit is specified
-    else
-        # Determine the unit and convert accordingly
-        case "${input_frequency: -1}" in
-        s) interval=${input_frequency%?} ;;              # Seconds
-        m) interval=$((${input_frequency%?} * 60)) ;;    # Minutes to seconds
-        h) interval=$((${input_frequency%?} * 3600)) ;;  # Hours to seconds
-        d) interval=$((${input_frequency%?} * 86400)) ;; # Days to seconds
-        *)
-            echo "Invalid frequency format"
-            return 1
-            ;; # Handle invalid formats
-        esac
+    if [[ ! "$input_frequency" =~ ^([0-9]+)([smhd]?)$ ]]; then
+        return 1
     fi
 
-    echo "$interval" # Return the interval in seconds
+    # Force base 10 so values such as "08" are not read as octal
+    local interval=$((10#${BASH_REMATCH[1]}))
+
+    case "${BASH_REMATCH[2]}" in
+    m) interval=$((interval * 60)) ;;
+    h) interval=$((interval * 3600)) ;;
+    d) interval=$((interval * 86400)) ;;
+    esac
+
+    echo "$interval"
 }
 
 # Function: Convert date to human-readable format
@@ -327,6 +372,22 @@ convert_date() {
     fi
 
     echo "$human_readable_date"
+}
+
+# Function: Sleep in a way that signal handlers can interrupt
+interruptible_sleep() {
+    sleep "$1" &
+    SLEEP_PID=$!
+    wait "$SLEEP_PID"
+    SLEEP_PID=""
+}
+
+# Function: Stop any running interruptible sleep
+stop_sleep() {
+    if [[ -n "$SLEEP_PID" ]]; then
+        kill "$SLEEP_PID" 2>/dev/null
+        SLEEP_PID=""
+    fi
 }
 
 # ==============================
@@ -354,8 +415,7 @@ log_to_console() {
     local log_level_name=$1
     local message=$2
     local line_number=$3
-    # Generate an ISO 8601 timestamp in UTC
-    local timestamp=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
+    local timestamp=$4
     local output_message="$message"
 
     # If verbose mode or debug level is enabled, format the output with timestamp and log level
@@ -363,22 +423,22 @@ log_to_console() {
         output_message="$timestamp [$log_level_name] $message (Line: $line_number)"
     fi
 
-    # Escape special characters to avoid issues with printf
-    local safe_message=$(printf "%s" "$output_message" | sed 's/[^[:print:]\t]//g') # Remove non-printable characters
+    # Remove non-printable characters
+    output_message="${output_message//[^[:print:]]/}"
 
     # Handle different log levels
     case $log_level_name in
     "FATAL")
-        printf "${RED_BG}%b${NC}\n" "$safe_message" >&2
+        printf "%s%s%s\n" "$RED_BG" "$output_message" "$NC" >&2
         ;;
     "ERROR")
-        printf "${RED}%b${NC}\n" "$safe_message" >&2
+        printf "%s%s%s\n" "$RED" "$output_message" "$NC" >&2
         ;;
     "WARN")
-        printf "${YELLOW}%b${NC}\n" "$safe_message" >&2
+        printf "%s%s%s\n" "$YELLOW" "$output_message" "$NC" >&2
         ;;
     *)
-        printf "%b${NC}\n" "$safe_message" >&2
+        printf "%s\n" "$output_message" >&2
         ;;
     esac
 }
@@ -388,23 +448,25 @@ log_message() {
     local log_level_name=$1
     local message=$2
     local line_number=${3:-"N/A"}
-    local timestamp=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
+
+    # Generate an ISO 8601 timestamp in UTC without starting a subprocess
+    local timestamp
+    TZ=UTC printf -v timestamp "%(%Y-%m-%dT%H:%M:%SZ)T" -1
 
     # Validate log level name
-    local log_level_index=${LOG_LEVELS_MAP[$log_level_name]}
-    if [[ -z "$log_level_index" ]]; then
+    if [[ -z "$log_level_name" || -z "${LOG_LEVELS_MAP[$log_level_name]:-}" ]]; then
+        printf "%s [ERROR] Invalid log level '%s'. Defaulting to INFO.\n" "$timestamp" "$log_level_name" >&2
         log_level_name="INFO"
-        log_level_index=${LOG_LEVELS_MAP[$log_level_name]}
-        printf "%s\n" "$timestamp [ERROR] Invalid log level specified. Defaulting to INFO." >&2
     fi
 
     # Validate current log level
-    local current_log_level_index=${LOG_LEVELS_MAP[$LOG_LEVEL]}
-    if [[ -z "$current_log_level_index" ]]; then
-        printf "%s\n" "$timestamp [ERROR] Invalid global log level. Defaulting to INFO." >&2
+    if [[ -z "$LOG_LEVEL" || -z "${LOG_LEVELS_MAP[$LOG_LEVEL]:-}" ]]; then
+        printf "%s [ERROR] Invalid global log level '%s'. Defaulting to INFO.\n" "$timestamp" "$LOG_LEVEL" >&2
         LOG_LEVEL="INFO"
-        current_log_level_index=${LOG_LEVELS_MAP[$LOG_LEVEL]}
     fi
+
+    # Skip messages below the current log level
+    log_at_or_above "$log_level_name" || return 0
 
     # Format the log message
     local formatted_message="$timestamp [$log_level_name] $message"
@@ -412,40 +474,41 @@ log_message() {
         formatted_message="$formatted_message (Line: $line_number)"
     fi
 
-    # Escape special characters in the message to prevent breaking formatting
-    local safe_message=$(printf "%s" "$formatted_message" | sed 's/[^[:print:]\t]//g')
+    # Remove non-printable characters so messages cannot break the log format
+    formatted_message="${formatted_message//[^[:print:]]/}"
 
-    # Log to file if the log level meets the criteria and the log file exists
-    if log_at_or_above "$log_level_name" && [[ -f "$LOG_FILE" ]]; then
-        printf "%s\n" "$safe_message" >>"$LOG_FILE" 2>/dev/null || true
+    # Log to file if the log file exists
+    if [[ -n "${LOG_FILE:-}" && -f "$LOG_FILE" ]]; then
+        printf "%s\n" "$formatted_message" >>"$LOG_FILE" 2>/dev/null || true
     fi
 
     # Always log to the console if not running as a service, or if no log file exists
-    if [[ "$IS_SERVICE" != true || ! -f "$LOG_FILE" ]] && log_at_or_above "$log_level_name"; then
-        log_to_console "$log_level_name" "$message" "$line_number"
+    if [[ "$IS_SERVICE" != true || -z "${LOG_FILE:-}" || ! -f "$LOG_FILE" ]]; then
+        log_to_console "$log_level_name" "$message" "$line_number" "$timestamp"
     fi
 }
 
 # Function: Initialize the log file
 init_log() {
-    # Ensure the directory for the log file exists
-    log_dir=$(dirname "$LOG_FILE")
-    if [ ! -d "$log_dir" ]; then
-        printf "Log file directory %s does not exist. Creating it...\n" "$log_dir"
-        mkdir -p "$log_dir" || {
-            log_message "FATAL" "Failed to create directory: $log_dir" "$LINENO"
-            exit 1
-        }
-    fi
-
-    if [ -z "$LOG_FILE" ]; then
+    if [[ -z "$LOG_FILE" ]]; then
         log_message "FATAL" "LOG_FILE variable is not set." "$LINENO"
         exit 1
     fi
 
-    if [ ! -f "$LOG_FILE" ]; then
-        # Attempt to create the log file
-        if touch "$LOG_FILE" 2>/dev/null; then
+    # Ensure the directory for the log file exists
+    local log_dir
+    log_dir=$(dirname "$LOG_FILE")
+    if [[ ! -d "$log_dir" ]]; then
+        if ! mkdir -p "$log_dir"; then
+            log_message "FATAL" "Failed to create directory: $log_dir" "$LINENO"
+            exit 1
+        fi
+        log_message "DEBUG" "Created log file directory: $log_dir" "$LINENO"
+    fi
+
+    if [[ ! -f "$LOG_FILE" ]]; then
+        # Attempt to create the log file, readable only by the current user
+        if (umask 077 && touch "$LOG_FILE") 2>/dev/null; then
             log_message "DEBUG" "Created log file: $LOG_FILE" "$LINENO"
         else
             log_message "FATAL" "Failed to create log file: $LOG_FILE" "$LINENO"
@@ -453,7 +516,7 @@ init_log() {
         fi
     else
         # Check if the log file is writable
-        if [ ! -w "$LOG_FILE" ]; then
+        if [[ ! -w "$LOG_FILE" ]]; then
             log_message "FATAL" "Log file exists but is not writable: $LOG_FILE" "$LINENO"
             exit 1
         fi
@@ -463,7 +526,7 @@ init_log() {
 
 # Function: Log the log file to the screen
 show_log() {
-    if [ -f "$LOG_FILE" ]; then
+    if [[ -f "$LOG_FILE" ]]; then
         cat "$LOG_FILE"
     else
         log_message "INFO" "Log file not found: $LOG_FILE" "$LINENO"
@@ -482,7 +545,7 @@ is_mount_point() {
     if [[ "$OSTYPE" == "linux"* ]]; then
         # Use `findmnt` if available on Linux
         if command -v findmnt >/dev/null 2>&1; then
-            findmnt -n -o TARGET --target "$dir" >/dev/null 2>&1
+            findmnt -n -o TARGET --mountpoint "$dir" >/dev/null 2>&1
             return $?
         fi
     elif [[ "$OSTYPE" == "darwin"* ]]; then
@@ -502,17 +565,25 @@ is_mount_point() {
 # Function: Check if a directory is critical
 is_critical_directory() {
     local dir="$1"
+
+    # Remove a trailing slash so "/home/" matches "/home"; "/" becomes empty
+    [[ "$dir" != "/" ]] && dir="${dir%/}"
+
     local critical_dirs=(
-        "/" "/home" "/bin" "/boot" "/dev" "/etc" "/lib" "/lib64" "/proc" "/root" "/sbin" "/sys" "/usr" "/var" "/tmp"
+        "" "/" "/home" "/bin" "/boot" "/dev" "/etc" "/lib" "/lib64" "/proc" "/root" "/sbin" "/sys" "/usr" "/var" "/tmp"
+        "/Users" "/Applications" "/Library" "/System" "/opt" "/private" "/private/tmp" "/private/var"
         "C:\\" "C:\\Windows" "C:\\Program Files" "C:\\Program Files (x86)" "C:\\Users" "C:\\Documents and Settings"
     )
 
     # Check if the directory is in the list of critical directories
-    for critical_dir in "${critical_dirs[@]}"; do
-        if [[ "$dir" == "$critical_dir" ]]; then
-            return 0 # true: critical directory
-        fi
-    done
+    if array_contains "$dir" "${critical_dirs[@]}"; then
+        return 0 # true: critical directory
+    fi
+
+    # Protect the home directory and every directory above it
+    if [[ -n "${HOME:-}" && ("$HOME" == "$dir" || "$HOME" == "$dir"/*) ]]; then
+        return 0 # true: critical directory
+    fi
 
     # Protect symbolic links
     if [[ -L "$dir" ]]; then
@@ -549,6 +620,12 @@ delete_cache() {
         exit 1
     fi
 
+    # Refuse to delete the cache while the service is using it
+    if [[ -n "${PID_FILE:-}" && -f "$PID_FILE" ]] && is_app_process "$(<"$PID_FILE")"; then
+        log_message "FATAL" "$APP_NAME is running. Stop it with --stop before deleting the cache." "$LINENO"
+        exit 1
+    fi
+
     # Attempt to delete the cache directory
     if rm -rf "$CACHE_DIR"; then
         log_message "INFO" "Success: All cached files in '$CACHE_DIR' deleted." "$LINENO"
@@ -561,12 +638,21 @@ delete_cache() {
 
 # Function: Initialize the cache directory
 init_cache() {
-    # Create the master cache directory and log file if they don't exist
-    if [ ! -d "$CACHE_DIR" ]; then
-        mkdir -p "$CACHE_DIR"
+    # Create the master cache directory, readable only by the current user
+    if [[ ! -d "$CACHE_DIR" ]]; then
+        if ! (umask 077 && mkdir -p "$CACHE_DIR"); then
+            log_message "FATAL" "Failed to create cache directory: $CACHE_DIR" "$LINENO"
+            exit 1
+        fi
         log_message "DEBUG" "Created cache directory: $CACHE_DIR" "$LINENO"
     else
         log_message "DEBUG" "Cache directory already exists: $CACHE_DIR" "$LINENO"
+    fi
+
+    # Another user could otherwise control the PID file and cached content
+    if [[ ! -O "$CACHE_DIR" ]]; then
+        log_message "FATAL" "Cache directory '$CACHE_DIR' is owned by another user. Use --cache-dir to choose a different location." "$LINENO"
+        exit 1
     fi
 }
 
@@ -579,25 +665,38 @@ send_desktop_notification() {
     local title="$1"
     local message="$2"
 
-    if [ "$DESKTOP_NOTIFICATION" = true ]; then
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            if ! osascript -e "display notification \"$message\" with title \"$title\""; then
-                log_message "ERROR" "Failed to send notification on macOS." "$LINENO"
-            fi
-        elif [[ "$OSTYPE" == "linux"* ]]; then
-            if command -v notify-send &>/dev/null; then
-                notify-send "$title" "$message"
-            else
-                log_message "ERROR" "notify-send is not installed. Install it to enable notifications on Linux." "$LINENO"
-            fi
-        elif [[ "$OSTYPE" == "cygwin" || "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-            if ! powershell -Command "[System.Windows.Forms.MessageBox]::Show('$message', '$title')"; then
-                log_message "ERROR" "Failed to send notification on Windows." "$LINENO"
+    [[ "$DESKTOP_NOTIFICATION" = true ]] || return 0
+
+    case "$OSTYPE" in
+    darwin*)
+        # Pass the text as arguments so quotes in it cannot change the AppleScript
+        if ! osascript -e 'on run argv' -e 'display notification (item 2 of argv) with title (item 1 of argv)' -e 'end run' \
+            "$title" "$message" >/dev/null 2>&1; then
+            log_message "ERROR" "Failed to send notification on macOS." "$LINENO"
+        fi
+        ;;
+    linux*)
+        if command -v notify-send &>/dev/null; then
+            if ! notify-send -- "$title" "$message" >/dev/null 2>&1; then
+                log_message "ERROR" "Failed to send notification on Linux." "$LINENO"
             fi
         else
-            log_message "ERROR" "Desktop notifications are only supported on macOS, Linux, and Windows." "$LINENO"
+            log_message "ERROR" "notify-send is not installed. Install it to enable notifications on Linux." "$LINENO"
         fi
-    fi
+        ;;
+    cygwin* | msys* | win32*)
+        # Pass the text through the environment so it is never parsed as PowerShell code
+        # shellcheck disable=SC2016 # The single quotes are intentional; PowerShell expands $env:NOIR_*
+        if ! NOIR_TITLE="$title" NOIR_MESSAGE="$message" powershell -NoProfile -NonInteractive -Command \
+            'Add-Type -AssemblyName System.Windows.Forms, System.Drawing; $n = New-Object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Information; $n.Visible = $true; $n.ShowBalloonTip(10000, $env:NOIR_TITLE, $env:NOIR_MESSAGE, [System.Windows.Forms.ToolTipIcon]::Info); Start-Sleep -Seconds 6; $n.Dispose()' \
+            >/dev/null 2>&1; then
+            log_message "ERROR" "Failed to send notification on Windows." "$LINENO"
+        fi
+        ;;
+    *)
+        log_message "ERROR" "Desktop notifications are only supported on macOS, Linux, and Windows." "$LINENO"
+        ;;
+    esac
 }
 
 # Function: Send Pushover notifications
@@ -607,57 +706,83 @@ send_pushover_notification() {
     local website_url=$3
     local response
 
-    if [ "$PUSHOVER_NOTIFICATION" = true ]; then
-        log_message "DEBUG" "Processing Pushover notification: $website_url" "$LINENO"
-        log_message "DEBUG" "Url: $website_url" "$LINENO"
-        log_message "DEBUG" "Message: $message" "$LINENO"
+    [[ "$PUSHOVER_NOTIFICATION" = true ]] || return 0
 
-        # Check if PUSHOVER_API_TOKEN is set
-        if [[ -z "$PUSHOVER_API_TOKEN" ]]; then
-            log_message "ERROR" "Error: PUSHOVER_API_TOKEN is not set." "$LINENO"
-            return 1
-        fi
+    log_message "DEBUG" "Processing Pushover notification: $website_url" "$LINENO"
+    log_message "DEBUG" "Message: $message" "$LINENO"
 
-        # Check if USER_KEY is set
-        if [[ -z "$PUSHOVER_USER_KEY" ]]; then
-            log_message "ERROR" "Error: PUSHOVER_USER_KEY is not set." "$LINENO"
-            return 1
-        fi
-
-        # Build the curl command
-        local curl_command="curl -s \
-            --form-string \"token=$PUSHOVER_API_TOKEN\" \
-            --form-string \"user=$PUSHOVER_USER_KEY\" \
-            --form-string \"title=$title\" \
-            --form-string \"message=$message\" \
-            --form \"priority=0\" \
-            https://api.pushover.net/1/messages.json"
-
-        # Add URL options if website_url is defined
-        if [[ -n "$website_url" ]]; then
-            curl_command+=" --form \"url=$website_url\" --form \"url_title=Visit Site\""
-        fi
-
-        # Execute the curl command
-        response=$(eval $curl_command)
-
-        if [[ $? -ne 0 || -z "$response" ]]; then
-            log_message "ERROR" "Failed to send Pushover notification for: $website_url" "$LINENO"
-            return 1
-        fi
-
-        # Extract the status from the JSON response
-        local status=$(echo "$response" | grep -o '"status":[0-9]*' | sed 's/"status"://')
-
-        # Check if status is 1 (success)
-        if [[ "$status" != "1" ]]; then
-            log_message "ERROR" "Pushover API returned an error: $response" "$LINENO"
-            return 1
-        fi
-
-        log_message "DEBUG" "Pushover notification sent successfully." "$LINENO"
-        return 0
+    # Check if PUSHOVER_API_TOKEN is set
+    if [[ -z "$PUSHOVER_API_TOKEN" ]]; then
+        log_message "ERROR" "Error: PUSHOVER_API_TOKEN is not set." "$LINENO"
+        return 1
     fi
+
+    # Check if USER_KEY is set
+    if [[ -z "$PUSHOVER_USER_KEY" ]]; then
+        log_message "ERROR" "Error: PUSHOVER_USER_KEY is not set." "$LINENO"
+        return 1
+    fi
+
+    # Pushover keys are alphanumeric; anything else would break the curl configuration below
+    if [[ ! "$PUSHOVER_API_TOKEN" =~ ^[A-Za-z0-9]+$ || ! "$PUSHOVER_USER_KEY" =~ ^[A-Za-z0-9]+$ ]]; then
+        log_message "ERROR" "Error: PUSHOVER_API_TOKEN and PUSHOVER_USER_KEY may only contain letters and numbers." "$LINENO"
+        return 1
+    fi
+
+    # Build the curl arguments as an array so message text is never evaluated by the shell
+    local curl_args=(
+        --silent --show-error --max-time 15
+        --form-string "title=$title"
+        --form-string "message=$message"
+        --form-string "priority=0"
+    )
+
+    # Add URL options if website_url is defined
+    if [[ -n "$website_url" ]]; then
+        curl_args+=(--form-string "url=$website_url" --form-string "url_title=Visit Site")
+    fi
+
+    # Credentials are read from stdin so they never appear in the process list
+    if ! response=$(printf 'form-string = "token=%s"\nform-string = "user=%s"\n' "$PUSHOVER_API_TOKEN" "$PUSHOVER_USER_KEY" |
+        curl "${curl_args[@]}" --config - https://api.pushover.net/1/messages.json 2>&1) || [[ -z "$response" ]]; then
+        log_message "ERROR" "Failed to send Pushover notification: $response" "$LINENO"
+        return 1
+    fi
+
+    # Check if status is 1 (success)
+    local status
+    status=$(jq -r '.status // empty' <<<"$response" 2>/dev/null)
+    if [[ "$status" != "1" ]]; then
+        log_message "ERROR" "Pushover API returned an error: $response" "$LINENO"
+        return 1
+    fi
+
+    log_message "DEBUG" "Pushover notification sent successfully." "$LINENO"
+    return 0
+}
+
+# Function: Check if a PID belongs to a running instance of this app
+is_app_process() {
+    local pid="$1"
+    local command
+
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+
+    # Guard against PID reuse by checking the command line when ps supports it
+    if command=$(ps -p "$pid" -o args= 2>/dev/null) && [[ -n "$command" ]]; then
+        [[ "$command" == *"$(basename "$0")"* ]]
+        return
+    fi
+
+    return 0
+}
+
+# Function: Handle termination signals
+setup_signal_handlers() {
+    trap 'cleanup_pid' EXIT
+    trap 'stop_sleep; exit 130' INT
+    trap 'stop_sleep; exit 143' TERM
 }
 
 # ==============================
@@ -666,91 +791,99 @@ send_pushover_notification() {
 
 # Function: Start the service
 start_service() {
-    # Set up the trap for cleanup on app exit
-    trap 'cleanup_pid' EXIT
-
     log_message "INFO" "Starting $APP_NAME service..." "$LINENO"
 
-    # Launch the service as a background process in a subshell
+    # Launch the service as a background process
     (
-        main >/dev/null 2>&1 &
-        local service_pid=$!
+        IS_SERVICE=true
+        # Keep running after the terminal that started the service closes
+        trap '' HUP
+        setup_signal_handlers
+        main
+    ) >/dev/null 2>&1 &
+    local service_pid=$!
+    echo "$service_pid" >"$PID_FILE"
 
-        # Sleep briefly to ensure the background process has initialized
-        sleep 3
+    # Sleep briefly to ensure the background process has initialized
+    sleep 1
 
-        # Verify that the background process is running by checking the PID
-        if kill -0 "$service_pid" >/dev/null 2>&1; then
-            IS_SERVICE=true
-            # Write the PID to the file
-            echo "$service_pid" >"$PID_FILE"
-            log_message "DEBUG" "$APP_NAME service started with PID $service_pid." "$LINENO"
-        else
-            # If the process failed to start, clean up and exit
-            log_message "FATAL" "Failed to start $APP_NAME service. PID is not valid." "$LINENO"
-            cleanup_pid
-            exit 1
-        fi
-    ) &
+    # Verify that the background process is running
+    if ! is_app_process "$service_pid"; then
+        log_message "FATAL" "Failed to start $APP_NAME service. Check the log file: $LOG_FILE" "$LINENO"
+        cleanup_pid
+        exit 1
+    fi
 
     # The service is now running in the background
-    log_message "INFO" "$APP_NAME service is running in the background." "$LINENO"
+    log_message "INFO" "$APP_NAME service is running in the background with PID $service_pid." "$LINENO"
 }
 
 # Function: Stop the service
 stop_service() {
     if [[ ! -f "$PID_FILE" ]]; then
         log_message "INFO" "No $APP_NAME service is currently running." "$LINENO"
-        exit 0
+        return 0
     fi
 
     local pid
-    pid=$(cat "$PID_FILE")
-    if kill -0 "$pid" >/dev/null 2>&1; then
-        log_message "INFO" "Stopping $APP_NAME service with PID $pid..." "$LINENO"
-        kill "$pid"
-        cleanup_pid
-        log_message "INFO" "$APP_NAME service stopped." "$LINENO"
-    else
+    pid=$(<"$PID_FILE")
+    if ! is_app_process "$pid"; then
         log_message "WARN" "No active $APP_NAME process found for PID $pid. Cleaning up stale PID file." "$LINENO"
         cleanup_pid
+        return 0
     fi
+
+    log_message "INFO" "Stopping $APP_NAME service with PID $pid..." "$LINENO"
+    kill "$pid" 2>/dev/null
+
+    # Wait up to 10 seconds for the service to exit
+    local waited=0
+    while kill -0 "$pid" 2>/dev/null && ((waited < 10)); do
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    if kill -0 "$pid" 2>/dev/null; then
+        log_message "WARN" "$APP_NAME service did not stop in time. Forcing it to stop." "$LINENO"
+        kill -9 "$pid" 2>/dev/null
+    fi
+
+    cleanup_pid
+    log_message "INFO" "$APP_NAME service stopped." "$LINENO"
 }
 
 # Function: Restart the service
 restart_service() {
-    if [[ ! -f "$PID_FILE" ]]; then
-        log_message "INFO" "No $APP_NAME service is currently running." "$LINENO"
-        exit 0
-    fi
-
-    log_message "INFO" "Restarting $APP_NAME service with PID $pid..." "$LINENO"
+    log_message "INFO" "Restarting $APP_NAME service..." "$LINENO"
     stop_service
+    show_config
     start_service
 }
 
 # Function: Check the status of the service
+# Returns 0 when running and 3 when stopped (LSB convention)
 status_service() {
     if [[ -f "$PID_FILE" ]]; then
         local pid
-        pid=$(cat "$PID_FILE")
-        if kill -0 "$pid" >/dev/null 2>&1; then
+        pid=$(<"$PID_FILE")
+        if is_app_process "$pid"; then
             log_message "INFO" "$APP_NAME service is running with PID $pid." "$LINENO"
-        else
-            log_message "WARN" "$APP_NAME service is not running, but PID file exists. Cleaning up stale PID file." "$LINENO"
-            cleanup_pid
+            return 0
         fi
+        log_message "WARN" "$APP_NAME service is not running, but PID file exists. Cleaning up stale PID file." "$LINENO"
+        cleanup_pid
     else
         log_message "INFO" "$APP_NAME service is not running." "$LINENO"
     fi
+    return 3
 }
 
 # Function: Prevent running multiple interactive instances (except for specific cases)
 check_already_running() {
     if [[ -f "$PID_FILE" ]]; then
         local pid
-        pid=$(cat "$PID_FILE")
-        if kill -0 "$pid" >/dev/null 2>&1; then
+        pid=$(<"$PID_FILE")
+        if is_app_process "$pid"; then
             log_message "ERROR" "Another instance of the $APP_NAME is already running (PID: $pid)." "$LINENO"
             exit 1
         else
@@ -762,10 +895,14 @@ check_already_running() {
 
 # Function: Cleanup PID file on exit
 cleanup_pid() {
-    # Ensure the PID file exists before attempting to clean it up
+    # Only remove the PID file if it belongs to this process or is stale
     if [[ -f "$PID_FILE" ]]; then
-        log_message "DEBUG" "Cleaning up $APP_NAME PID file and exiting." "$LINENO"
-        rm -f "$PID_FILE"
+        local pid
+        pid=$(<"$PID_FILE")
+        if [[ "$pid" == "$BASHPID" ]] || ! is_app_process "$pid"; then
+            log_message "DEBUG" "Cleaning up $APP_NAME PID file." "$LINENO"
+            rm -f "$PID_FILE"
+        fi
     fi
 }
 
@@ -774,7 +911,7 @@ start_process() {
     # Handle status or stop service before checking for running instances
     if [[ "$SHOW_STATUS" == true ]]; then
         status_service
-        exit 0
+        exit $?
     fi
 
     if [[ "$STOP_SERVICE" == true ]]; then
@@ -782,94 +919,110 @@ start_process() {
         exit 0
     fi
 
-    # Check if an instance is already running
     if [[ "$RESTART_SERVICE" == true ]]; then
         restart_service
+        return
+    fi
+
+    # Check if an instance is already running
+    check_already_running
+
+    # Log and start the configuration
+    log_message "INFO" "Starting $APP_NAME: $(date)" "$LINENO"
+    show_config
+
+    # Start the service or run interactively
+    if [[ "$START_SERVICE" == true ]]; then
+        start_service
     else
-        check_already_running
-
-        # Log and start the configuration
-        log_message "INFO" "Starting $APP_NAME: $(date)" "$LINENO"
-        show_config
-
-        # Start the service or run interactively
-        if [[ "$START_SERVICE" == true ]]; then
-            start_service
-        else
-            log_message "INFO" "Running $APP_NAME interactively..." "$LINENO"
-            # Set up a trap for cleanup on termination
-            trap 'cleanup_pid' EXIT
-            echo $$ >"$PID_FILE"
-            main
-        fi
+        log_message "INFO" "Running $APP_NAME interactively..." "$LINENO"
+        setup_signal_handlers
+        echo $$ >"$PID_FILE"
+        main
     fi
 }
+
 
 # ==============================
 # Configuration and Initialization Functions
 # ==============================
 
+# Function: Check if a configuration key holds a secret
+is_secret_key() {
+    [[ "$1" == *TOKEN* || "$1" == *KEY* || "$1" == *SECRET* || "$1" == *PASSWORD* ]]
+}
+
 # Function: Load configuration from JSON file
 load_config() {
     local config_file_path="$1"
 
-    if key_exists "CONFIG_FILE" SKIP_CONFIG_KEYS[@] && [[ ! -f "$config_file_path" ]]; then
-        log_message "FATAL" "Configuration file not found: $config_file_path" "$LINENO"
-        exit 1
-    elif ! key_exists "CONFIG_FILE" SKIP_CONFIG_KEYS[@] && [[ ! -f "$config_file_path" ]]; then
+    if [[ ! -f "$config_file_path" ]]; then
+        if key_exists "CONFIG_FILE"; then
+            log_message "FATAL" "Configuration file not found: $config_file_path" "$LINENO"
+            exit 1
+        fi
+        log_message "DEBUG" "No configuration file at $config_file_path. Using defaults." "$LINENO"
         return 0
     fi
 
-    # Use jq to parse the JSON and set environment variables
+    # Use jq to parse the JSON into key=value lines
     local jq_output
-    jq_output=$(jq -r '.configuration | to_entries | .[] | "\(.key)=\(.value)"' "$config_file_path")
-    log_message "DEBUG" "Configuration file settings: $jq_output" "$LINENO"
+    if ! jq_output=$(jq -r '(.configuration // {}) | to_entries[] | "\(.key)=\(.value // "" | tostring)"' "$config_file_path" 2>&1); then
+        log_message "FATAL" "Configuration file is not valid JSON: $config_file_path ($jq_output)" "$LINENO"
+        exit 1
+    fi
 
+    local key value
     while IFS="=" read -r key value; do
-        # Skip empty lines, invalid entries, or keys that are in the skip_keys array
-        if [[ -n "$key" && -n "$value" && ! " ${SKIP_CONFIG_KEYS[@]} " =~ " ${key} " && "$key" != "CONFIG_FILE" ]]; then
-            [[ "$key" == *_DIR || "$key" == *_FILE || "$key" == *_CMD ]] && value="$(normalize_path "$value")"
-            export "$key"="$value"
+        # Skip empty values and settings given on the command line
+        [[ -z "$key" || -z "$value" ]] && continue
+        key_exists "$key" && continue
+
+        # Only accept known keys so the file cannot overwrite unrelated shell variables
+        if ! array_contains "$key" "${CONFIG_KEYS[@]}"; then
+            log_message "WARN" "Ignoring unknown configuration key '$key' in $config_file_path" "$LINENO"
+            continue
+        fi
+
+        [[ "$key" == *_DIR || "$key" == *_FILE ]] && value="$(normalize_path "$value")"
+        printf -v "$key" "%s" "$value"
+
+        if is_secret_key "$key"; then
+            log_message "DEBUG" "Setting $key=********" "$LINENO"
+        else
             log_message "DEBUG" "Setting $key=$value" "$LINENO"
         fi
     done <<<"$jq_output"
 }
 
-# Function: Get all "connections" groups and return them in an array
-get_connection_groups() {
-    local config_file_path="$1"
-    jq -r '.connections | keys | sort[]' "$config_file_path"
+# Function: Validate settings after the configuration file and command line are processed
+validate_settings() {
+    local setting
+    for setting in CHECK_INTERVAL TIMEOUT; do
+        if ! get_interval_in_seconds "${!setting}" >/dev/null; then
+            log_message "FATAL" "$setting must be a whole number with an optional s, m, h or d suffix (for example 30s or 5m), not '${!setting}'." "$LINENO"
+            exit 1
+        fi
+    done
+
+    if [[ ! "$REPEAT" =~ ^[0-9]+$ ]]; then
+        log_message "FATAL" "REPEAT must be a whole number, not '$REPEAT'." "$LINENO"
+        exit 1
+    fi
+
+    validate_app_settings
 }
 
 # Function: Check if a key exists in the SKIP_CONFIG_KEYS
 key_exists() {
-    local key="$1"
-
-    if [[ " ${SKIP_CONFIG_KEYS[@]} " =~ " ${key} " ]]; then
-        return 0 # Key exists
-    fi
-
-    return 1 # Key does not exist
-}
-
-# Function: Get connection settings as key-value pairs
-get_connection_settings() {
-    local group="$1"
-    local index="$2"
-    local config_file_path="$3"
-    local -n result_array=$4
-
-    while IFS="=" read -r key value; do
-        result_array["$key"]="$value"
-        log_message "DEBUG" "Connection settings: $key=$value" "$LINENO"
-    done < <(jq -r ".connections[\"$group\"][$index] | to_entries | map(\"\\(.key)=\\(.value)\") | .[]" "$config_file_path")
+    array_contains "$1" "${SKIP_CONFIG_KEYS[@]}"
 }
 
 # Function: Show configuration file
 show_config_file() {
     log_message "INFO" "Configuration file: $CONFIG_FILE" "$LINENO"
     log_message "INFO" "" "$LINENO"
-    if [ -f "$CONFIG_FILE" ]; then
+    if [[ -f "$CONFIG_FILE" ]]; then
         cat "$CONFIG_FILE"
     else
         log_message "ERROR" "Configuration file not found: $CONFIG_FILE" "$LINENO"
@@ -881,8 +1034,9 @@ show_config_file() {
 # Function: Initialize the configuration file
 init_config() {
     # Ensure the directory for the configuration file exists
+    local config_dir
     config_dir=$(dirname "$CONFIG_FILE")
-    if [ ! -d "$config_dir" ]; then
+    if [[ ! -d "$config_dir" ]]; then
         printf "Configuration file directory %s does not exist. Creating it...\n" "$config_dir"
         mkdir -p "$config_dir" || {
             log_message "FATAL" "Failed to create directory: $config_dir" "$LINENO"
@@ -891,58 +1045,82 @@ init_config() {
     fi
 
     # Check if the configuration file already exists
-    if [ -f "$CONFIG_FILE" ]; then
-        if [ "$INIT_FORCE" = true ]; then
+    if [[ -f "$CONFIG_FILE" ]]; then
+        if [[ "$INIT_FORCE" = true ]]; then
             printf "FORCE is true. Replacing the existing configuration file...\n"
+        elif [[ ! -t 0 ]]; then
+            log_message "FATAL" "Configuration file $CONFIG_FILE already exists. Use --force-init to replace it." "$LINENO"
+            exit 1
         else
-            read -p "Configuration file $CONFIG_FILE already exists. Do you want to replace it? (y/n): " choice
+            local choice
+            read -r -p "Configuration file $CONFIG_FILE already exists. Do you want to replace it? (y/n): " choice
             case "$choice" in
             y | Y)
                 printf "Replacing the existing configuration file...\n"
                 ;;
             n | N)
                 printf "Keeping the existing configuration file.\n"
-                return
+                exit 0
                 ;;
             *)
                 printf "Invalid choice. Keeping the existing configuration file.\n"
-                return
+                exit 0
                 ;;
             esac
         fi
     fi
 
     # Create the configuration content
-    config_content=$(
-        cat <<EOF
-{
-    "configuration": {
-        "CACHE_DIR": "$CACHE_DIR",
-        "LOG_FILE": "$LOG_FILE",
-        "CHECK_INTERVAL": "$CHECK_INTERVAL",
-        "TIMEOUT": "$TIMEOUT",
-        "SYSTEM_NAME": "$SYSTEM_NAME",
-        "PUSHOVER_NOTIFICATION": "$PUSHOVER_NOTIFICATION",
-        "PUSHOVER_USER_KEY": "$PUSHOVER_USER_KEY",
-        "PUSHOVER_API_TOKEN": "$PUSHOVER_API_TOKEN",
-        "DESKTOP_NOTIFICATION": "$DESKTOP_NOTIFICATION",
-        "VERBOSE": "$VERBOSE",
-        "LOG_LEVEL": "$LOG_LEVEL",
-        "PING_TARGET": "$PING_TARGET",
-        "DNS_TEST_DOMAIN": "$DNS_TEST_DOMAIN"
-	}
-}
-EOF
-    )
+    local config_content
+    if ! config_content=$(default_config_json); then
+        log_message "FATAL" "Failed to build the default configuration." "$LINENO"
+        exit 1
+    fi
 
-    # Write the configuration content to the file
-    if ! echo "$config_content" >"$CONFIG_FILE"; then
+    # Write the configuration, readable only by the current user because it can hold API keys
+    if ! (umask 077 && printf "%s\n" "$config_content" >"$CONFIG_FILE"); then
         log_message "FATAL" "Failed to create configuration file at $CONFIG_FILE" "$LINENO"
         exit 1
     fi
 
     log_message "INFO" "Default configuration file created at $CONFIG_FILE" "$LINENO"
     exit 0
+}
+
+
+# Function: Build the default configuration as JSON
+default_config_json() {
+    jq -n \
+        --arg CACHE_DIR "$CACHE_DIR" \
+        --arg LOG_FILE "$LOG_FILE" \
+        --arg CHECK_INTERVAL "$CHECK_INTERVAL" \
+        --arg TIMEOUT "$TIMEOUT" \
+        --arg SYSTEM_NAME "$SYSTEM_NAME" \
+        --arg PUSHOVER_NOTIFICATION "$PUSHOVER_NOTIFICATION" \
+        --arg PUSHOVER_USER_KEY "$PUSHOVER_USER_KEY" \
+        --arg PUSHOVER_API_TOKEN "$PUSHOVER_API_TOKEN" \
+        --arg DESKTOP_NOTIFICATION "$DESKTOP_NOTIFICATION" \
+        --arg VERBOSE "$VERBOSE" \
+        --arg LOG_LEVEL "$LOG_LEVEL" \
+        --arg PING_TARGET "$PING_TARGET" \
+        --arg DNS_TEST_DOMAIN "$DNS_TEST_DOMAIN" \
+        '{
+            configuration: {
+                CACHE_DIR: $CACHE_DIR,
+                LOG_FILE: $LOG_FILE,
+                CHECK_INTERVAL: $CHECK_INTERVAL,
+                TIMEOUT: $TIMEOUT,
+                SYSTEM_NAME: $SYSTEM_NAME,
+                PUSHOVER_NOTIFICATION: $PUSHOVER_NOTIFICATION,
+                PUSHOVER_USER_KEY: $PUSHOVER_USER_KEY,
+                PUSHOVER_API_TOKEN: $PUSHOVER_API_TOKEN,
+                DESKTOP_NOTIFICATION: $DESKTOP_NOTIFICATION,
+                VERBOSE: $VERBOSE,
+                LOG_LEVEL: $LOG_LEVEL,
+                PING_TARGET: $PING_TARGET,
+                DNS_TEST_DOMAIN: $DNS_TEST_DOMAIN
+            }
+        }'
 }
 
 # Function: Show configuration information
@@ -988,11 +1166,11 @@ show_help() {
     # Cache Management
     printf "\nCache Management:\n"
     printf "  -x, --clean                 Delete all cached files.\n"
-    printf "  -C, --cache-dir  <path>     Specify a custom cache directory (default: %s).\n" "${CACHE_DIR}"
+    printf "  -C, --cache-dir <path>      Specify a custom cache directory (default: %s).\n" "${CACHE_DIR}"
 
     # Notification Options
     printf "\nNotification Options:\n"
-    printf "  -n, --system-name           Name of the system running the script (default: %s).\n" "${SYSTEM_NAME}"
+    printf "  -n, --system-name <name>    Name of the system running the script (default: %s).\n" "${SYSTEM_NAME}"
     printf "  -p, --pushover              Send Pushover notifications.\n"
     printf "  -u, --user-key <key>        Specify the user key for Pushover notifications.\n"
     printf "  -a, --api-token <token>     Specify the API token for Pushover notifications.\n"
@@ -1009,7 +1187,7 @@ show_help() {
     printf "\nRemote Connection Configuration:\n"
     printf "  -I, --interval <s,m,h,d>    Set the interval between checks (default: %s).\n" "${CHECK_INTERVAL}"
     printf "  -T, --timeout <s,m,h,d>     Set the connection timeout for remote connections (default: %s).\n" "${TIMEOUT}"
-    printf "  -N, --repeat <number>       Repeat the checks in interactive mode N number of times and exit (default: %s).\n" "${REPEAT:-0}"
+    printf "  -N, --repeat <number>       Repeat the checks N number of times and exit (default: %s, which runs until stopped).\n" "${REPEAT:-0}"
     printf "  -P, --ping-target <IP>      Set a custom ping target (default: %s).\n" "${PING_TARGET}"
     printf "  -D, --dns-test-domain <domain>  Set a custom DNS test domain (default: %s).\n" "${DNS_TEST_DOMAIN}"
 
@@ -1018,7 +1196,7 @@ show_help() {
     printf "  -s, --start                 Start the %s service in the background.\n" "${APP_NAME}"
     printf "  -k, --stop                  Stop the %s service.\n" "${APP_NAME}"
     printf "  -r, --restart               Restart the %s service.\n" "${APP_NAME}"
-    printf "  -t, --status                Check the current status of the %s service.\n" "${APP_NAME}"
+    printf "  -t, --status                Check the current status of the %s service (exit code 3 when stopped).\n" "${APP_NAME}"
 
     # Examples
     printf "\nExamples:\n"
@@ -1046,6 +1224,17 @@ show_help() {
 # Argument Processing Functions
 # ==============================
 
+# Function: Exit with an error if an option is missing its value
+require_option_value() {
+    local option="$1"
+    local value="${2-}"
+
+    if [[ -z "$value" || "$value" == -* ]]; then
+        printf "Error: %s requires a value\n" "$option" >&2
+        exit 1
+    fi
+}
+
 # Function: Parse command-line arguments and setup environment
 parse_cli_options() {
 
@@ -1057,53 +1246,46 @@ parse_cli_options() {
     # Set default hostname
     SYSTEM_NAME="$(get_hostname)"
 
-    # Process high priority items first
-    [[ " $@ " =~ " --help " || " $@ " =~ " -h " ]] && show_help && show_version && exit 0
-    [[ " $@ " =~ " --version " || " $@ " =~ " -V " ]] && show_version && exit 0
-
-    # Check for log level and verbose and process so they are available early
-    if [[ " $@ " =~ " --log-level " || " $@ " =~ " -L " ]]; then
-        for ((i = 1; i <= $#; i++)); do
-            case "${!i}" in
-            --log-level | -L)
-                next=$((i + 1))
-                if [[ -z "${!next}" || "${!next}" == -* ]]; then
-                    printf "Error: %s requires a value\n" "${!i}" >&2
-                    exit 1
-                fi
-                # Check if the log level exists in the LOG_LEVELS_MAP array
-                if [[ -n "${LOG_LEVELS_MAP[${!next}]}" ]]; then
-                    LOG_LEVEL="${!next}"
-                    SKIP_CONFIG_KEYS+=("LOG_LEVEL")
-                else
-                    printf "Error: %s requires a valid value. Available levels are: %s\n" "${!i}" "${!LOG_LEVELS_MAP[*]}" >&2
-                    exit 1
-                fi
-                # Remove the processed options from the arguments list
-                set -- "${@:1:$((i - 1))}" "${@:((i + 2))}"
-                i=$((i - 1))
-                ;;
-            --verbose | -v)
-                VERBOSE=true
-                SKIP_CONFIG_KEYS+=("VERBOSE")
-                # Remove the processed options from the arguments list
-                set -- "${@:1:$((i - 1))}" "${@:((i + 1))}"
-                i=$((i - 1))
-                ;;
-            esac
-        done
-    fi
+    # Process high priority items first so they apply before anything else runs
+    local i next
+    for ((i = 1; i <= $#; i++)); do
+        case "${!i}" in
+        --help | -h)
+            show_help
+            show_version
+            exit 0
+            ;;
+        --version | -V)
+            show_version
+            exit 0
+            ;;
+        --log-level | -L)
+            next=$((i + 1))
+            require_option_value "${!i}" "${!next-}"
+            # Check if the log level exists in the LOG_LEVELS_MAP array
+            if [[ -z "${LOG_LEVELS_MAP[${!next}]:-}" ]]; then
+                printf "Error: %s requires a valid value. Available levels are: %s\n" "${!i}" "${!LOG_LEVELS_MAP[*]}" >&2
+                exit 1
+            fi
+            LOG_LEVEL="${!next}"
+            SKIP_CONFIG_KEYS+=("LOG_LEVEL")
+            ;;
+        --verbose | -v)
+            VERBOSE=true
+            SKIP_CONFIG_KEYS+=("VERBOSE")
+            ;;
+        --)
+            break
+            ;;
+        esac
+    done
 
     # Process remaining options
-    local options_processed=false
     while [[ $# -gt 0 ]]; do
         case "$1" in
         # Configuration and Initialization
         --config | -c)
-            if [[ -z "$2" || "$2" == -* ]]; then
-                printf "Error: %s requires a value\n" "$1" >&2
-                exit 1
-            fi
+            require_option_value "$1" "${2-}"
             CONFIG_FILE="$(normalize_path "$2")"
             SKIP_CONFIG_KEYS+=("CONFIG_FILE")
             shift 2
@@ -1135,10 +1317,7 @@ parse_cli_options() {
             shift
             ;;
         --cache-dir | -C)
-            if [[ -z "$2" || "$2" == -* ]]; then
-                printf "Error: %s requires a value\n" "$1" >&2
-                exit 1
-            fi
+            require_option_value "$1" "${2-}"
             CACHE_DIR="$(normalize_path "$2")"
             LOG_FILE="$(normalize_path "$2/$LOG_FILE_NAME")"
             SKIP_CONFIG_KEYS+=("CACHE_DIR")
@@ -1147,10 +1326,7 @@ parse_cli_options() {
 
         # Notification Options
         --system-name | -n)
-            if [[ -z "$2" || "$2" == -* ]]; then
-                printf "Error: %s requires a value\n" "$1" >&2
-                exit 1
-            fi
+            require_option_value "$1" "${2-}"
             SYSTEM_NAME="$2"
             SKIP_CONFIG_KEYS+=("SYSTEM_NAME")
             shift 2
@@ -1161,19 +1337,13 @@ parse_cli_options() {
             shift
             ;;
         --user-key | -u)
-            if [[ -z "$2" || "$2" == -* ]]; then
-                printf "Error: %s requires a value\n" "$1" >&2
-                exit 1
-            fi
+            require_option_value "$1" "${2-}"
             PUSHOVER_USER_KEY="$2"
             SKIP_CONFIG_KEYS+=("PUSHOVER_USER_KEY")
             shift 2
             ;;
         --api-token | -a)
-            if [[ -z "$2" || "$2" == -* ]]; then
-                printf "Error: %s requires a value\n" "$1" >&2
-                exit 1
-            fi
+            require_option_value "$1" "${2-}"
             PUSHOVER_API_TOKEN="$2"
             SKIP_CONFIG_KEYS+=("PUSHOVER_API_TOKEN")
             shift 2
@@ -1184,16 +1354,19 @@ parse_cli_options() {
             shift
             ;;
 
-        # Logging and Output
+        # Logging and Output (log level and verbose were applied above)
+        --log-level | -L)
+            shift 2
+            ;;
+        --verbose | -v)
+            shift
+            ;;
         --log | -l)
             SHOW_LOG=true
             shift
             ;;
         --output | -o)
-            if [[ -z "$2" || "$2" == -* ]]; then
-                printf "Error: %s requires a value\n" "$1" >&2
-                exit 1
-            fi
+            require_option_value "$1" "${2-}"
             LOG_FILE="$(normalize_path "$2")"
             SKIP_CONFIG_KEYS+=("LOG_FILE")
             shift 2
@@ -1201,30 +1374,21 @@ parse_cli_options() {
 
         # Remote Connection Configuration
         --interval | -I)
-            if [[ -z "$2" || "$2" == -* ]]; then
-                printf "Error: %s requires a value\n" "$1" >&2
-                exit 1
-            fi
+            require_option_value "$1" "${2-}"
             CHECK_INTERVAL="$2"
             SKIP_CONFIG_KEYS+=("CHECK_INTERVAL")
             shift 2
             ;;
         --timeout | -T)
-            if [[ -z "$2" || "$2" == -* ]]; then
-                printf "Error: %s requires a value\n" "$1" >&2
-                exit 1
-            fi
+            require_option_value "$1" "${2-}"
             TIMEOUT="$2"
             SKIP_CONFIG_KEYS+=("TIMEOUT")
             shift 2
             ;;
         --repeat | -N)
-            if [[ -z "$2" || "$2" == -* ]]; then
-                printf "Error: %s requires a value\n" "$1" >&2
-                exit 1
-            fi
+            require_option_value "$1" "${2-}"
             if ! [[ "$2" =~ ^[0-9]+$ ]]; then
-                printf "Error: Timeout must be an integer\n" >&2
+                printf "Error: %s must be a whole number\n" "$1" >&2
                 exit 1
             fi
             REPEAT="$2"
@@ -1232,24 +1396,17 @@ parse_cli_options() {
             shift 2
             ;;
         --ping-target | -P)
-            if [[ -z "$2" || "$2" == -* ]]; then
-                printf "Error: %s requires a value\n" "$1" >&2
-                exit 1
-            fi
+            require_option_value "$1" "${2-}"
             PING_TARGET="$2"
             SKIP_CONFIG_KEYS+=("PING_TARGET")
             shift 2
             ;;
         --dns-test-domain | -D)
-            if [[ -z "$2" || "$2" == -* ]]; then
-                printf "Error: %s requires a value\n" "$1" >&2
-                exit 1
-            fi
+            require_option_value "$1" "${2-}"
             DNS_TEST_DOMAIN="$2"
             SKIP_CONFIG_KEYS+=("DNS_TEST_DOMAIN")
             shift 2
             ;;
-
         # Process Management
         --start | -s)
             START_SERVICE=true
@@ -1270,7 +1427,6 @@ parse_cli_options() {
 
         # End of Options
         --)
-            options_processed=true
             shift
             break
             ;;
@@ -1287,6 +1443,22 @@ parse_cli_options() {
         esac
     done
 
+    # Load the configuration file unless a new one is being created
+    local default_log_file="$LOG_FILE"
+    if [[ "$INIT" != true ]]; then
+        load_config "$CONFIG_FILE"
+    fi
+
+    # Keep the log file inside the cache directory when only the cache directory was configured
+    if [[ "$LOG_FILE" == "$default_log_file" ]] && ! key_exists "LOG_FILE"; then
+        LOG_FILE="$(normalize_path "$CACHE_DIR/$LOG_FILE_NAME")"
+    fi
+
+    # Set the PID file based on final CACHE_DIR
+    PID_FILE="$(normalize_path "$CACHE_DIR/$PID_FILE_NAME")"
+
+    validate_settings
+
     # Check for cache critical path
     if is_critical_directory "$CACHE_DIR"; then
         log_message "FATAL" "Attempted to set cache path to a critical directory '$CACHE_DIR'. Aborting." "$LINENO"
@@ -1297,13 +1469,9 @@ parse_cli_options() {
     [[ "$CLEAN" = true ]] && delete_cache
 
     # Initialize the default configuration file and exit
-    [[ -z "$INIT" || "$INIT" = false ]] && load_config "$CONFIG_FILE"
     [[ "$INIT" = true ]] && init_config
     init_cache
     init_log
-
-    # Set the PID file based on final CACHE_DIR
-    PID_FILE="$(normalize_path "$CACHE_DIR/$PID_FILE_NAME")"
 
     # Process final commands after configuration is completely finalized
     [[ "$EDIT_CONFIG_FILE" = true ]] && edit_file "$CONFIG_FILE"
@@ -1317,19 +1485,39 @@ parse_cli_options() {
 # Function: Process and execute actions based on parsed arguments
 process_arguments() {
     # App specific configuration and parsing
-    NETWORK_CSV_FILE="$CACHE_DIR/$NETWORK_CSV_FILE"
-    DNS_CSV_FILE="$CACHE_DIR/$DNS_CSV_FILE"
+    NETWORK_CSV_FILE="$CACHE_DIR/$NETWORK_CSV_FILE_NAME"
+    DNS_CSV_FILE="$CACHE_DIR/$DNS_CSV_FILE_NAME"
 
     # Initialize CSV file
     init_csv
 
     # Keep this last so we show the final configuration state
-    [[ "$SHOW_CONFIG" = true ]] && show_config && show_version && exit
+    [[ "$SHOW_CONFIG" = true ]] && show_config && show_version && exit 0
+
+    return 0
 }
 
 # ==============================
 # Application Functions
 # ==============================
+
+# Function: Check that a host name or IP address is safe to pass to network tools
+is_valid_host() {
+    [[ "$1" =~ ^[A-Za-z0-9._:-]+$ && "$1" != -* ]]
+}
+
+# Function: Validate app specific settings
+validate_app_settings() {
+    if ! is_valid_host "$PING_TARGET"; then
+        log_message "FATAL" "PING_TARGET must be a host name or IP address, not '$PING_TARGET'." "$LINENO"
+        exit 1
+    fi
+
+    if ! is_valid_host "$DNS_TEST_DOMAIN"; then
+        log_message "FATAL" "DNS_TEST_DOMAIN must be a domain name, not '$DNS_TEST_DOMAIN'." "$LINENO"
+        exit 1
+    fi
+}
 
 # Function: Initialize the CSV downtime history files
 init_csv() {
@@ -1344,6 +1532,48 @@ init_csv() {
     fi
 }
 
+# Function: Format seconds since the epoch as a UTC ISO 8601 timestamp
+format_timestamp() {
+    TZ=UTC printf "%(%Y-%m-%dT%H:%M:%SZ)T" "$1"
+}
+
+# Function: Check network connectivity with a single ping
+is_network_up() {
+    local timeout="$1"
+
+    # macOS uses -t for the timeout in seconds; on Linux -W is the timeout in seconds
+    # (on macOS -W is in milliseconds, so it cannot be shared)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        ping -c 1 -t "$timeout" "$PING_TARGET" >/dev/null 2>&1
+    else
+        ping -c 1 -W "$timeout" "$PING_TARGET" >/dev/null 2>&1
+    fi
+}
+
+# Function: Check DNS resolution
+is_dns_up() {
+    local timeout="$1"
+    nslookup -timeout="$timeout" -retry=1 "$DNS_TEST_DOMAIN" >/dev/null 2>&1
+}
+
+# Function: Record an outage in a CSV file and send a recovery notification
+record_recovery() {
+    local csv_file="$1"
+    local down_start="$2"
+    local now="$3"
+    local description="$4"
+    local duration=$((now - down_start))
+    local up_timestamp
+    up_timestamp=$(format_timestamp "$now")
+
+    echo "$(format_timestamp "$down_start"),$up_timestamp,$duration" >>"$csv_file"
+
+    local message="$up_timestamp: $SYSTEM_NAME $description after $duration seconds of downtime."
+    log_message "WARN" "$message" "$LINENO"
+    send_desktop_notification "$APP_NAME Alert" "$message"
+    send_pushover_notification "$APP_NAME Alert" "$message"
+}
+
 # ==============================
 # Main Application Execution
 # ==============================
@@ -1351,67 +1581,41 @@ init_csv() {
 # Function: Start the main process
 main() {
     local repeat_count=0
-    local interval=$(get_interval_in_seconds "$CHECK_INTERVAL")
-    local timeout=$(get_interval_in_seconds "$TIMEOUT")
+    local interval timeout
+    interval=$(get_interval_in_seconds "$CHECK_INTERVAL")
+    timeout=$(get_interval_in_seconds "$TIMEOUT")
     local network_down_start dns_down_start
     local network_down=false dns_down=false
 
     while true; do
-        # Cross-platform timestamp handling
-        local current_time=$(date +%s) # Unix timestamp for calculations
-        local current_timestamp
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            current_timestamp=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
-        else
-            current_timestamp=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
-        fi
+        local current_time current_timestamp
+        current_time=$(date +%s)
+        current_timestamp=$(format_timestamp "$current_time")
 
         log_message "DEBUG" "Current timestamp: $current_timestamp" "$LINENO"
 
         # Start of main application function calls
 
         # Check network connectivity
-        if ping -c 1 -W "$timeout" "$PING_TARGET" >/dev/null 2>&1; then
+        if is_network_up "$timeout"; then
             log_message "DEBUG" "Network is up" "$LINENO"
             # Network is up
             if [[ "$network_down" = true ]]; then
-                # Calculate total network downtime
-                local network_up_timestamp="$current_timestamp"
-                local network_down_duration=$((current_time - network_down_start))
-                if [[ "$OSTYPE" == "darwin"* ]]; then
-                    echo "$(date -u -r "$network_down_start" "+%Y-%m-%dT%H:%M:%SZ"),$network_up_timestamp,$network_down_duration" >>"$NETWORK_CSV_FILE"
-                else
-                    echo "$(date -u -d "@$network_down_start" "+%Y-%m-%dT%H:%M:%SZ"),$network_up_timestamp,$network_down_duration" >>"$NETWORK_CSV_FILE"
-                fi
-                local message="$network_up_timestamp: $SYSTEM_NAME network is back online after $network_down_duration seconds of downtime."
-                log_message "WARN" "$message" "$LINENO"
-                send_desktop_notification "$APP_NAME Alert" "$message"
-                send_pushover_notification "$APP_NAME Alert" "$message"
+                record_recovery "$NETWORK_CSV_FILE" "$network_down_start" "$current_time" "network is back online"
                 network_down=false
             fi
 
             # Check DNS resolution
-            if nslookup -timeout="$timeout" -retry=1 "$DNS_TEST_DOMAIN" >/dev/null 2>&1; then
+            if is_dns_up "$timeout"; then
                 log_message "DEBUG" "$SYSTEM_NAME DNS resolution is successful" "$LINENO"
                 # DNS is up
                 if [[ "$dns_down" = true ]]; then
-                    # Calculate total DNS downtime
-                    local dns_up_timestamp="$current_timestamp"
-                    local dns_down_duration=$((current_time - dns_down_start))
-                    if [[ "$OSTYPE" == "darwin"* ]]; then
-                        echo "$(date -u -r "$dns_down_start" "+%Y-%m-%dT%H:%M:%SZ"),$dns_up_timestamp,$dns_down_duration" >>"$DNS_CSV_FILE"
-                    else
-                        echo "$(date -u -d "@$dns_down_start" "+%Y-%m-%dT%H:%M:%SZ"),$dns_up_timestamp,$dns_down_duration" >>"$DNS_CSV_FILE"
-                    fi
-                    local message="$dns_up_timestamp: $SYSTEM_NAME DNS resolution is back after $dns_down_duration seconds of downtime."
-                    log_message "WARN" "$message" "$LINENO"
-                    send_desktop_notification "$APP_NAME Alert" "$message"
-                    send_pushover_notification "$APP_NAME Alert" "$message"
+                    record_recovery "$DNS_CSV_FILE" "$dns_down_start" "$current_time" "DNS resolution is back"
                     dns_down=false
                 fi
             else
                 log_message "DEBUG" "$SYSTEM_NAME DNS resolution failed" "$LINENO"
-                # DNS is down
+                # DNS is down. Only a desktop notification is sent because Pushover needs DNS.
                 if [[ "$dns_down" = false ]]; then
                     dns_down_start=$current_time
                     local message="$current_timestamp: $SYSTEM_NAME DNS resolution failed. DNS is now down."
@@ -1422,7 +1626,7 @@ main() {
             fi
         else
             log_message "DEBUG" "$SYSTEM_NAME network is down" "$LINENO"
-            # Network is down
+            # Network is down. Only a desktop notification is sent because Pushover needs the network.
             if [[ "$network_down" = false ]]; then
                 network_down_start=$current_time
                 local message="$current_timestamp: $SYSTEM_NAME network is down."
@@ -1438,13 +1642,13 @@ main() {
         repeat_count=$((repeat_count + 1))
         log_message "DEBUG" "Iteration: $repeat_count" "$LINENO"
 
-        # Check if REPEAT is set and not zero
-        if [[ -z "$REPEAT" || "$REPEAT" != 0 ]] && [[ "$repeat_count" -ge "$REPEAT" ]]; then
+        # Stop after REPEAT iterations unless REPEAT is 0 (run until stopped)
+        if [[ "$REPEAT" -ne 0 && "$repeat_count" -ge "$REPEAT" ]]; then
             log_message "DEBUG" "Reached the maximum number of repetitions: $REPEAT" "$LINENO"
             break
         else
             log_message "DEBUG" "Sleeping for $CHECK_INTERVAL" "$LINENO"
-            sleep "$interval"
+            interruptible_sleep "$interval"
         fi
     done
 }

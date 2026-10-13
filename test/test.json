@@ -12,6 +12,6 @@
         "VERBOSE": "false",
         "LOG_LEVEL": "INFO",
         "PING_TARGET": "8.8.8.8",
-        "DNS_TEST_DOMAIN: "example.com"
+        "DNS_TEST_DOMAIN": "example.com"
     }
 }
